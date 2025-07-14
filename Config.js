@@ -156,6 +156,7 @@ const LEADS_GMAIL_FILTER_QUERY = `(subject:("job alert" OR "jobs for you" OR "ne
 
 // --- Platform Detection Keywords (from email body/sender) ---
 // Maps keywords found in sender email addresses to platform names.
+const IGNORED_DOMAINS = new Set(['.io', '.com', '.net', '.org']);
 const PLATFORM_DOMAIN_KEYWORDS = {
   "linkedin.com": "LinkedIn",
   "indeed.com": "Indeed",
@@ -180,7 +181,7 @@ const HELPER_SHEET_COLUMN_WIDTHS = [150, 70, 180, 120, 100, 200, 100, 150, 100];
 
 // --- Gemini API Configuration ---
 const GEMINI_API_KEY_PROPERTY = 'GEMINI_API_KEY'; // UserProperty key for storing the user's Gemini API key.
-const GEMINI_API_ENDPOINT_TEXT_ONLY = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent";
+const GEMINI_API_ENDPOINT_TEXT_ONLY = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent";
 
 // Default instructions for Gemini (Job Application Parsing)
 const GEMINI_SYSTEM_INSTRUCTION_APP_TRACKER = `

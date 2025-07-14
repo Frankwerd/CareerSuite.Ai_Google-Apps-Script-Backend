@@ -13,7 +13,7 @@ function callGemini_forApplicationDetails(emailSubject, emailBody, apiKey) {
     return null;
   }
 
-  const API_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=" + apiKey;
+  const API_ENDPOINT = GEMINI_API_ENDPOINT_TEXT_ONLY + "?key=" + apiKey;
   if (DEBUG_MODE) Logger.log(`[DEBUG] GEMINI_PARSE_APP: Using API Endpoint: ${API_ENDPOINT.split('key=')[0] + "key=..."}`);
 
   const bodySnippet = emailBody ? emailBody.substring(0, 12000) : ""; // Max 12k chars for body snippet
@@ -132,7 +132,7 @@ Output JSON:
 
   const payload = {
     "contents": [{"parts": [{"text": prompt}]}],
-    "generationConfig": { "temperature": 0.2, "maxOutputTokens": 512, "topP": 0.95, "topK": 40 },
+    "generationConfig": { "temperature": 0.2, "maxOutputTokens": 2048, "topP": 0.95, "topK": 40 },
     "safetySettings": [ 
       { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE" },
       { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE" },
@@ -215,7 +215,7 @@ function callGemini_forJobLeads(emailBody, apiKey) {
         return { success: false, data: null, error: `emailBody is not a string.` };
     }
 
-    const API_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=" + apiKey;
+    const API_ENDPOINT = GEMINI_API_ENDPOINT_TEXT_ONLY + "?key=" + apiKey;
 
     // Mock data logic for when API key is placeholder or not set (as before)
     if (!apiKey || apiKey === 'AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' || apiKey.trim() === '') {

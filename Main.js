@@ -1,17 +1,12 @@
-// File: Main.gs
-// Project: CareerSuite.AI Job Tracker
-// Description: Main script file orchestrating setup, email processing, and UI for the job application tracker.
-// Author: Francis John LiButti (Originals), AI Integration & Refinements by Assistant
-// Version: 7
+/**
+ * @file Main script file orchestrating setup, email processing, and UI for the job application tracker.
+ * @author Francis John LiButti (Originals), AI Integration & Refinements by Assistant
+ * @version 7
+ */
 
 /**
- * Runs the complete initial setup for ALL modules of the CareerSuite.AI Job Tracker.
- * This function is designed to be called by the WebApp after a new sheet is created for the user,
- * or can be run manually from the Apps Script editor or a custom menu.
- * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} [passedSpreadsheet] Optional. The spreadsheet object to set up.
- *        If not provided (e.g., manual run), it attempts to get/create the sheet based on Config.gs.
- * @return {{success: boolean, message: string, detailedMessages: Array<string>, sheetId: string | null, sheetUrl: string | null}}
- *         An object indicating the outcome of the setup process.
+ * Checks if the critical configuration variables are set correctly.
+ * @returns {boolean} True if the configuration is valid, false otherwise.
  */
 function checkConfig() {
     const FUNC_NAME = "checkConfig";
@@ -32,6 +27,15 @@ function checkConfig() {
     return allClear;
 }
 
+/**
+ * Runs the complete initial setup for all modules of the CareerSuite.AI Job Tracker.
+ * This function is designed to be called by the WebApp after a new sheet is created for the user,
+ * or can be run manually from the Apps Script editor or a custom menu.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} [passedSpreadsheet] Optional. The spreadsheet object to set up.
+ * If not provided, it attempts to get/create the sheet based on `Config.js`.
+ * @returns {{success: boolean, message: string, detailedMessages: string[], sheetId: string|null, sheetUrl: string|null}}
+ * An object indicating the outcome of the setup process.
+ */
 function runFullProjectInitialSetup(passedSpreadsheet) {
   const RUNDATE = new Date().toISOString();
   const FUNC_NAME = "runFullProjectInitialSetup";
@@ -172,9 +176,11 @@ function runFullProjectInitialSetup(passedSpreadsheet) {
 
 
 /**
- * Sets up the core Job Application Tracker: Labels, Sheets (Applications, Dashboard, Helper), and Triggers.
+ * Sets up the core Job Application Tracker module.
+ * This includes creating and formatting the necessary sheets (Applications, Dashboard, Helper),
+ * setting up Gmail labels and filters, and creating time-driven triggers.
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} activeSS The spreadsheet object to set up.
- * @return {{success: boolean, messages: Array<string>}} Result of the setup for this module.
+ * @returns {{success: boolean, messages: string[]}} An object containing the setup result and messages.
  */
 function initialSetup_LabelsAndSheet(activeSS) {
   const FUNC_NAME = "initialSetup_LabelsAndSheet";
@@ -358,6 +364,10 @@ function initialSetup_LabelsAndSheet(activeSS) {
   return { success: moduleSuccess, messages: messages };
 }
 
+/**
+ * A wrapper function that processes job application emails and then marks stale applications.
+ * This is intended to be called by a time-driven trigger.
+ */
 function processEmailsAndMarkStale() {
     const { spreadsheet: ss } = getOrCreateSpreadsheetAndSheet();
     if (!ss) {
@@ -370,7 +380,12 @@ function processEmailsAndMarkStale() {
 }
 
 
-// --- Main Email Processing Function (Job Application Tracker) ---
+/**
+ * The main function for processing job application emails.
+ * It fetches emails, uses Gemini or regex to parse them, and updates the spreadsheet.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss The spreadsheet object.
+ * @param {GoogleAppsScript.Properties.Properties} scriptProperties The script's properties service.
+ */
 function processJobApplicationEmails(ss, scriptProperties) {
     const FUNC_NAME = "processJobApplicationEmails";
     const SCRIPT_START_TIME = new Date();
@@ -732,7 +747,12 @@ function processJobApplicationEmails(ss, scriptProperties) {
 }
 
 
-// --- Auto-Reject Stale Applications Function ---
+/**
+ * Marks stale applications as "Rejected".
+ * An application is considered stale if its last update date is older than the configured threshold
+ * and it is not in a final state.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss The spreadsheet object.
+ */
 function markStaleApplicationsAsRejected(ss) {
   const FUNC_NAME = "markStaleApplicationsAsRejected";
   const SCRIPT_START_TIME = new Date();
@@ -808,7 +828,11 @@ function markStaleApplicationsAsRejected(ss) {
   Logger.log(`==== ${FUNC_NAME}: END (${SCRIPT_END_TIME.toLocaleString()}) ==== Time: ${(SCRIPT_END_TIME.getTime() - SCRIPT_START_TIME.getTime()) / 1000}s ====`);
 }
 
-// --- onOpen Function ---
+/**
+ * A special function that runs when the spreadsheet is opened.
+ * It creates the custom menu for the script.
+ * @param {GoogleAppsScript.Events.SheetsOnOpen} e The onOpen event object.
+ */
 function onOpen(e) {
   const ui = SpreadsheetApp.getUi();
   const menuName = CUSTOM_MENU_NAME || '⚙️ CareerSuite.AI Tools'; // CUSTOM_MENU_NAME from Config.gs
@@ -896,13 +920,15 @@ function onOpen(e) {
       .addItem('🔑 Set Gemini API Key', 'setSharedGeminiApiKey_UI')
       .addItem('🔄 Activate AI Features & Sync Key', 'activateAiFeatures') // New menu item
       .addItem('🔍 Show All User Properties', 'showAllUserProperties')
-      .addItem('🔩 TEMPORARY: Set Hardcoded API Key', 'TEMPORARY_manualSetSharedGeminiApiKey'));
+      .addItem('🔩 TEMPORARY: Set Hardcoded API Key', 'TEMPORARY_manualSetSharedGeminiApiKey'))
+      .addSeparator()
+      .addItem('❌ Uninstall Backend', 'uninstall');
   menu.addToUi();
 }
 
 /**
- * Wrapper function to be called by the user from the menu to run the full initial setup.
- * Provides UI feedback and manages setup flags.
+ * A wrapper function called by the user from the menu to run the full initial setup.
+ * It provides UI feedback and manages setup flags.
  */
 function userDrivenFullSetup() {
   const ui = SpreadsheetApp.getUi();
@@ -963,6 +989,52 @@ function userDrivenFullSetup() {
   }
 }
 
+
+/**
+ * Activates AI features by fetching the API key from the master Web App and storing it in ScriptProperties.
+ * @returns {boolean} True if AI features were successfully activated, false otherwise.
+ */
+function uninstall() {
+  const FUNC_NAME = "uninstall";
+  Logger.log(`\n==== ${FUNC_NAME}: STARTING ====`);
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert(
+    'Confirm Uninstall',
+    'This will remove all triggers and Gmail filters created by this script. Are you sure you want to continue?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response === ui.Button.YES) {
+    // Remove triggers
+    const triggers = ScriptApp.getProjectTriggers();
+    for (const trigger of triggers) {
+      ScriptApp.deleteTrigger(trigger);
+    }
+    Logger.log(`[${FUNC_NAME}] All triggers have been removed.`);
+
+    // Remove Gmail filters
+    const advancedGmailService = Gmail;
+    const existingFiltersResponse = advancedGmailService.Users.Settings.Filters.list('me');
+    const existingFiltersList = (existingFiltersResponse && existingFiltersResponse.filter && Array.isArray(existingFiltersResponse.filter)) ? existingFiltersResponse.filter : [];
+
+    const filterQueriesToRemove = [
+      TRACKER_GMAIL_FILTER_QUERY_APP_UPDATES,
+      LEADS_GMAIL_FILTER_QUERY
+    ];
+
+    for (const filter of existingFiltersList) {
+      if (filterQueriesToRemove.includes(filter.criteria?.query)) {
+        advancedGmailService.Users.Settings.Filters.remove('me', filter.id);
+        Logger.log(`[${FUNC_NAME}] Removed Gmail filter with query: ${filter.criteria.query}`);
+      }
+    }
+
+    ui.alert('Uninstall Complete', 'All triggers and Gmail filters have been removed.', ui.ButtonSet.OK);
+  } else {
+    ui.alert('Uninstall Canceled', 'No changes have been made.', ui.ButtonSet.OK);
+  }
+  Logger.log(`\n==== ${FUNC_NAME}: FINISHED ====`);
+}
 
 function activateAiFeatures() {
   const FUNC_NAME = "activateAiFeatures";

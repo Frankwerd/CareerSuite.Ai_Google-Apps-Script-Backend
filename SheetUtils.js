@@ -1,12 +1,12 @@
-// File: SheetUtils.gs
-// Project: CareerSuite.AI Job Tracker
-// Description: Contains utility functions for Google Sheets interaction,
-// including sheet creation, formatting, and data access setup.
+/**
+ * @file Contains utility functions for Google Sheets interaction,
+ * including sheet creation, formatting, and data access setup.
+ */
 
 /**
  * Converts a 1-based column index to its letter representation (e.g., 1 -> A, 27 -> AA).
  * @param {number} column The 1-based column index.
- * @return {string} The column letter(s).
+ * @returns {string} The column letter(s).
  */
 function columnToLetter(column) {
   let temp, letter = '';
@@ -21,13 +21,11 @@ function columnToLetter(column) {
 /**
  * Sets up basic formatting for a given sheet: headers, frozen row, column widths, and optional banding.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet object to format.
- * @param {Array<string>} headersArray An array of strings for the header row.
- * @param {Array<{col: number, width: number}>} [columnWidthsArray] Optional. Array of objects specifying column index (1-based) and width.
+ * @param {string[]} headersArray An array of strings for the header row.
+ * @param {{col: number, width: number}[]} [columnWidthsArray] Optional. Array of objects specifying column index (1-based) and width.
  * @param {boolean} [applyBandingFlag] Optional. True to apply row banding. Defaults to false.
- * @param {string} [bandingHeaderColorHex] Optional. Hex color for banding header. Defaults to BRAND_COLORS.CAROLINA_BLUE.
- * @param {string} [bandingFirstRowColorHex] Optional. Hex color for first band. Defaults to BRAND_COLORS.WHITE.
- * @param {string} [bandingSecondRowColorHex] Optional. Hex color for second band. Defaults to BRAND_COLORS.PALE_GREY.
- * @return {boolean} True if formatting was successful, false otherwise.
+ * @param {GoogleAppsScript.Spreadsheet.BandingTheme} [bandingThemeEnum] Optional. The banding theme to apply.
+ * @returns {boolean} True if formatting was successful, false otherwise.
  */
 function setupSheetFormatting(sheet, headersArray, columnWidthsArray, applyBandingFlag, bandingThemeEnum) {
   const FUNC_NAME = "setupSheetFormatting";
@@ -160,8 +158,11 @@ function setupSheetFormatting(sheet, headersArray, columnWidthsArray, applyBandi
   }
 }
 
-// The getOrCreateSpreadsheetAndSheet function remains the same as the corrected version I provided previously
-// (the one NOT named _Fallback)
+/**
+ * Gets or creates the target spreadsheet.
+ * It first checks for a stored spreadsheet ID, then a fixed ID, then by name, and finally creates a new one if none are found.
+ * @returns {{spreadsheet: GoogleAppsScript.Spreadsheet.Spreadsheet}} An object containing the spreadsheet.
+ */
 function getOrCreateSpreadsheetAndSheet() {
   let ss = null;
   const FUNC_NAME = "getOrCreateSpreadsheetAndSheet";

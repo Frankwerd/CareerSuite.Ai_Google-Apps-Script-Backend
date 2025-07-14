@@ -1,8 +1,15 @@
-// File: GeminiService.gs
-// Description: Handles all interactions with the Google Gemini API for
-// AI-powered parsing of email content to extract job application details and job leads.
+/**
+ * @file Handles all interactions with the Google Gemini API for
+ * AI-powered parsing of email content to extract job application details and job leads.
+ */
 
-// --- GEMINI API PARSING LOGIC ---
+/**
+ * Calls the Gemini API to parse job application details from an email.
+ * @param {string} emailSubject The subject of the email.
+ * @param {string} emailBody The plain text body of the email.
+ * @param {string} apiKey The Gemini API key.
+ * @returns {{company: string, title: string, status: string}|null} An object with the parsed details or null on failure.
+ */
 function callGemini_forApplicationDetails(emailSubject, emailBody, apiKey) {
   if (!apiKey) {
     Logger.log("[INFO] GEMINI_PARSE_APP: API Key not provided. Skipping Gemini call.");

@@ -1,11 +1,14 @@
-// File: Dashboard.gs
-// Description: Manages the Dashboard and DashboardHelperData sheets,
-// including chart creation and formula setup for helper data.
+/**
+ * @file Manages the Dashboard and DashboardHelperData sheets,
+ * including chart creation and formula setup for helper data.
+ */
 
-// Local helper function to convert column index to letter.
-// If columnToLetter from SheetUtils.gs is globally available and SheetUtils.gs is guaranteed
-// to be processed/loaded by the runtime before Dashboard.gs, this local version can be removed
-// and calls changed to columnToLetter(COLUMN_CONSTANT_FROM_CONFIG).
+/**
+ * Converts a column index to its letter representation.
+ * @param {number} column The column index (1-based).
+ * @returns {string} The column letter.
+ * @private
+ */
 function _columnToLetter_DashboardLocal(column) {
   let temp, letter = '';
   while (column > 0) {
@@ -17,10 +20,10 @@ function _columnToLetter_DashboardLocal(column) {
 }
 
 /**
- * Gets or creates the Dashboard sheet. Tab color is set here.
- * Final positioning is handled by runFullProjectInitialSetup in Main.gs.
+ * Gets or creates the Dashboard sheet and sets its tab color.
+ * Final positioning is handled by `runFullProjectInitialSetup` in `Main.js`.
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet The spreadsheet object.
- * @return {GoogleAppsScript.Spreadsheet.Sheet | null}
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet | null} The dashboard sheet or null if an error occurs.
  */
 function getOrCreateDashboardSheet(spreadsheet) {
   const FUNC_NAME = "getOrCreateDashboardSheet";
@@ -49,9 +52,9 @@ function getOrCreateDashboardSheet(spreadsheet) {
 }
 
 /**
- * Formats the dashboard sheet layout, titles, and scorecards (with direct formulas to Applications sheet).
+ * Formats the dashboard sheet layout, including titles, scorecards, and charts.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} dashboardSheet The dashboard sheet object.
- * @return {boolean} True if formatting was successful.
+ * @returns {boolean} True if formatting was successful, false otherwise.
  */
 function formatDashboardSheet(dashboardSheet) {
   const FUNC_NAME = "formatDashboardSheet";
@@ -158,10 +161,10 @@ function formatDashboardSheet(dashboardSheet) {
 }
 
 /**
- * Gets or creates the Helper Data sheet.
- * Detailed formatting (headers, tab color, hiding) handled by initialSetup_LabelsAndSheet in Main.gs.
+ * Gets or creates the helper data sheet.
+ * Detailed formatting is handled by `initialSetup_LabelsAndSheet` in `Main.js`.
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet The spreadsheet object.
- * @return {GoogleAppsScript.Spreadsheet.Sheet | null}
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet | null} The helper sheet or null if an error occurs.
  */
 function getOrCreateHelperSheet(spreadsheet) {
   const FUNC_NAME = "getOrCreateHelperSheet";
@@ -175,10 +178,9 @@ function getOrCreateHelperSheet(spreadsheet) {
 }
 
 /**
- * Sets up the formulas in the DashboardHelperData sheet.
- * This is called ONCE during initial setup.
- * @param {GoogleAppsScript.Spreadsheet.Sheet} helperSheet The "DashboardHelperData" sheet object.
- * @return {boolean} True if formulas were set successfully.
+ * Sets up the formulas in the `DashboardHelperData` sheet. This is called once during initial setup.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} helperSheet The `DashboardHelperData` sheet object.
+ * @returns {boolean} True if formulas were set successfully, false otherwise.
  */
 function setupHelperSheetFormulas(helperSheet) {
   const FUNC_NAME = "setupHelperSheetFormulas";
@@ -267,11 +269,11 @@ function setupHelperSheetFormulas(helperSheet) {
 
 
 /**
- * Ensures charts on the Dashboard sheet are created/updated.
- * Relies on DashboardHelperData being populated by formulas.
+ * Ensures charts on the Dashboard sheet are created or updated.
+ * This function relies on the `DashboardHelperData` sheet being populated by formulas.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} dashboardSheet The "Dashboard" sheet object.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} helperSheet The "DashboardHelperData" sheet object.
- * @param {GoogleAppsScript.Spreadsheet.Sheet} applicationsSheet (Optional for context)
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} [applicationsSheet] Optional for context.
  */
 function updateDashboardMetrics(dashboardSheet, helperSheet, applicationsSheet) {
   const FUNC_NAME = "updateDashboardMetrics";
@@ -310,6 +312,11 @@ function updateDashboardMetrics(dashboardSheet, helperSheet, applicationsSheet) 
 //  or the version I provided just before with those setOption loops.)
 // Ensure their function names here EXACTLY match the calls in updateDashboardMetrics above.
 
+/**
+ * Updates the platform distribution pie chart on the dashboard.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} dashboardSheet The dashboard sheet.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} helperSheet The helper data sheet.
+ */
 function updatePlatformDistributionChart(dashboardSheet, helperSheet) {
   const FUNC_NAME = "updatePlatformDistributionChart";
   const CHART_TITLE = "Platform Distribution";
@@ -389,6 +396,11 @@ function updatePlatformDistributionChart(dashboardSheet, helperSheet) {
   }
 }
 
+/**
+ * Updates the applications over time line chart on the dashboard.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} dashboardSheet The dashboard sheet.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} helperSheet The helper data sheet.
+ */
 function updateApplicationsOverTimeChart(dashboardSheet, helperSheet) {
   const FUNC_NAME = "updateApplicationsOverTimeChart";
   const CHART_TITLE = "Applications Over Time (Weekly)";
@@ -418,6 +430,11 @@ function updateApplicationsOverTimeChart(dashboardSheet, helperSheet) {
   } catch (e) { Logger.log(`[${FUNC_NAME} ERROR] Build/insert/update "${CHART_TITLE}": ${e.message}`); }
 }
 
+/**
+ * Updates the application funnel column chart on the dashboard.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} dashboardSheet The dashboard sheet.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} helperSheet The helper data sheet.
+ */
 function updateApplicationFunnelChart(dashboardSheet, helperSheet) {
   const FUNC_NAME = "updateApplicationFunnelChart";
   const CHART_TITLE = "Application Funnel (Peak Stages)";
@@ -447,6 +464,10 @@ function updateApplicationFunnelChart(dashboardSheet, helperSheet) {
   } catch (e) { Logger.log(`[${FUNC_NAME} ERROR] Build/insert/update "${CHART_TITLE}": ${e.message}`); }
 }
 
+/**
+ * Returns an array of brand colors for charts.
+ * @returns {string[]} An array of hex color codes.
+ */
 function BRAND_COLORS_CHART_ARRAY() {
     return [ BRAND_COLORS.LAPIS_LAZULI, BRAND_COLORS.CAROLINA_BLUE, BRAND_COLORS.HUNYADI_YELLOW, BRAND_COLORS.PALE_ORANGE, BRAND_COLORS.CHARCOAL, "#27AE60", "#8E44AD", "#E67E22", "#16A085", "#C0392B" ];
 }

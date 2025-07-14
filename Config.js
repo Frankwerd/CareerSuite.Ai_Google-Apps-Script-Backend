@@ -1,11 +1,13 @@
-// File: Config.gs
-// Project: CareerSuite.AI Job Tracker
-// Description: Contains all global configuration constants and user-facing display names for the project.
-// This allows for easy updates to sheet names, labels, statuses, etc., without deep code changes.
-// Author: Assistant
-// Version: 1.5 (Added Leads Module Configs, Gemini Configs)
+/**
+ * @file Contains all global configuration constants and user-facing display names for the project.
+ * This allows for easy updates to sheet names, labels, statuses, etc., without deep code changes.
+ * @author Assistant
+ * @version 1.5
+ */
 
-// IMPORTANT: Replace YOUR_MASTER_DEPLOYMENT_ID with the actual deployment ID of your master script Web App
+/**
+ * @description IMPORTANT: Replace YOUR_MASTER_DEPLOYMENT_ID with the actual deployment ID of your master script Web App
+ */
 const MASTER_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyYR4sMfRplUw92UC1MiYad9V_0o3jL0j73Om3JJCrxBTIFxpUvEClMUdEVjkKzdDRK/exec'; // Replace with actual URL
 
 // --- Debugging & Development ---

@@ -1,6 +1,13 @@
-// File: AdminUtils.gs
-// Description: Contains administrative utility functions for project setup and configuration,
-// such as managing API keys stored in UserProperties.
+/**
+ * @file Contains administrative utility functions for project setup and configuration,
+ * such as managing API keys stored in UserProperties.
+ */
+
+/**
+ * Performs a manual test to check if the template sheet can be accessed and copied.
+ * It uses the TEMPLATE_SHEET_ID from Config.js.
+ * Displays success or failure messages to the user via the Spreadsheet UI.
+ */
 function manualTestTemplateAccess() {
   const id = TEMPLATE_SHEET_ID; // From Config.gs
   if (!id || id === "YOUR_ACTUAL_TEMPLATE_MJM_SHEET_ID_HERE") {
@@ -16,8 +23,10 @@ function manualTestTemplateAccess() {
   }
 }
 /**
- * Provides a UI prompt to set the shared Gemini API Key in UserProperties.
- * Uses the GEMINI_API_KEY_PROPERTY constant from Config.gs.
+ * Provides a user interface prompt to set the shared Gemini API Key in UserProperties.
+ * This function handles both Spreadsheet and non-Spreadsheet environments (fallback to Browser.inputBox).
+ * It validates the key's length and format, and confirms overwrites with the user.
+ * The property name under which the key is stored is defined by GEMINI_API_KEY_PROPERTY in Config.js.
  */
 function setSharedGeminiApiKey_UI() {
   const MIN_KEY_LENGTH = 35; // Minimum expected length for a Gemini API key
@@ -100,8 +109,10 @@ function setSharedGeminiApiKey_UI() {
 }
 
 /**
- * TEMPORARY: Manually sets the shared Gemini API Key in UserProperties.
- * Edit YOUR_GEMINI_KEY_HERE in the code before running.
+ * Manually sets the shared Gemini API Key in UserProperties.
+ * This function is intended for temporary use or for environments where the UI is not available.
+ * @deprecated This function is not recommended for production use. Use `setSharedGeminiApiKey_UI` instead.
+ * The user must edit the script and insert their key directly into the function.
  */
 function TEMPORARY_manualSetSharedGeminiApiKey() {
   const YOUR_GEMINI_KEY_HERE = 'AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'; // <<< EDIT THIS LINE
@@ -123,7 +134,8 @@ function TEMPORARY_manualSetSharedGeminiApiKey() {
 
 /**
  * Displays all UserProperties set for this script project to the logs.
- * Sensitive values like API keys are partially masked.
+ * Sensitive values like API keys are partially masked for security.
+ * It also displays a confirmation message in the UI.
  */
 function showAllUserProperties() {
   const userProps = PropertiesService.getUserProperties().getProperties();

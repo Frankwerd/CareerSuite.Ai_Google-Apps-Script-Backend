@@ -198,11 +198,11 @@ Output JSON:
     } catch (e) {
       Logger.log(`[ERROR] GEMINI_PARSE_APP: Exception during API call (Attempt ${attempt}): ${e.toString()}\nStack: ${e.stack}`);
       if (attempt < maxAttempts) { Utilities.sleep(3000); continue; }
-      return null;
+      return {error: e.toString()};
     }
   }
   Logger.log(`[ERROR] GEMINI_PARSE_APP: Failed after ${maxAttempts} attempts.`);
-  return null;
+  return {error: `Failed after ${maxAttempts} attempts.`};
 }
 
 
@@ -214,14 +214,10 @@ function callGemini_forJobLeads(emailBody, apiKey) {
 
     const API_ENDPOINT = GEMINI_API_ENDPOINT_TEXT_ONLY + "?key=" + apiKey;
 
-    // Mock data logic for when API key is placeholder or not set (as before)
     if (!apiKey || apiKey === 'AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' || apiKey.trim() === '') {
-        Logger.log("[GEMINI_LEADS WARN STUB] API Key placeholder/missing. Using MOCK for job leads.");
-        // ... (your existing mock response logic for leads) ...
-        if (emailBody.toLowerCase().includes("multiple job listings inside") || emailBody.toLowerCase().includes("software engineer at google")) {
-            return { success: true, data: { candidates: [{ content: { parts: [{ text: JSON.stringify([ { "jobTitle": "Software Engineer (Mock)", "company": "Tech Alpha (Mock)", "location": "Remote", "source": "Mock Job Board", "jobUrl": "https://example.com/job/alpha", "notes": "This is a mock note." }, { "jobTitle": "Product Manager (Mock)", "company": "Innovate Beta (Mock)", "location": "New York, NY", "source": "Mock Alerts", "jobUrl": "https://example.com/job/beta", "notes": "Requires 5 years experience." } ]) }] } }] }, error: null };
-        }
-        return { success: true, data: { candidates: [{ content: { parts: [{ text: JSON.stringify([{ "jobTitle": "N/A (Mock Single)", "company": "Some Corp (Mock)", "location": "Remote", "source": "Mock Direct", "jobUrl": "N/A", "notes": "Basic mock entry." }]) }] } }] }, error: null };
+        const errorMsg = "API Key is not set. Please set it in the configuration.";
+        Logger.log(`[GEMINI_LEADS ERROR] ${errorMsg}`);
+        return { success: false, data: null, error: errorMsg };
     }
 
     // --- MODIFIED PROMPT ---

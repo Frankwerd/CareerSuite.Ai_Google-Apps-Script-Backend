@@ -13,10 +13,33 @@
  * @return {{success: boolean, message: string, detailedMessages: Array<string>, sheetId: string | null, sheetUrl: string | null}}
  *         An object indicating the outcome of the setup process.
  */
+function checkConfig() {
+    const FUNC_NAME = "checkConfig";
+    const criticalVars = {
+        MASTER_WEB_APP_URL,
+        TEMPLATE_SHEET_ID,
+        MASTER_SCRIPT_ID,
+        GEMINI_API_KEY_PROPERTY,
+        GEMINI_API_ENDPOINT_TEXT_ONLY
+    };
+    let allClear = true;
+    for (const [varName, varValue] of Object.entries(criticalVars)) {
+        if (typeof varValue === 'undefined' || varValue === null || varValue === "" || varValue.includes("REPLACE") || varValue.includes("YOUR_")) {
+            Logger.log(`[${FUNC_NAME} CRITICAL] Configuration variable ${varName} is not set correctly. Value: "${varValue}"`);
+            allClear = false;
+        }
+    }
+    return allClear;
+}
+
 function runFullProjectInitialSetup(passedSpreadsheet) {
   const RUNDATE = new Date().toISOString();
   const FUNC_NAME = "runFullProjectInitialSetup";
   Logger.log(`==== ${FUNC_NAME}: STARTING (CareerSuite.AI v1.2 - ${RUNDATE}) ====`);
+  if (!checkConfig()) {
+      Logger.log(`[${FUNC_NAME} CRITICAL] Configuration check failed. Aborting setup.`);
+      return { success: false, message: "Critical configuration is missing.", detailedMessages: ["Critical configuration is missing. Please check the logs."], sheetId: null, sheetUrl: null };
+  }
   let overallSuccess = true;
   let setupMessages = [];
   let activeSS;
@@ -267,7 +290,7 @@ function initialSetup_LabelsAndSheet(activeSS) {
             }
         }
         if (!filterExists) {
-            const filterResource = { criteria: { query: filterQuery }, action: { addLabelIds: [trackerToProcessLabelId], removeLabelIds: ['INBOX'] } };
+            const filterResource = { criteria: { query: filterQuery }, action: { addLabelIds: [trackerToProcessLabelId] } };
             const createdFilterResponse = gmailApiServiceForFilter.Users.Settings.Filters.create(filterResource, 'me');
             if (!createdFilterResponse || !createdFilterResponse.id) {
                  throw new Error(`Gmail filter creation for tracker FAILED or did not return ID. Response: ${JSON.stringify(createdFilterResponse)}`);
@@ -320,12 +343,8 @@ function initialSetup_LabelsAndSheet(activeSS) {
   if(moduleSuccess) {
     Logger.log(`[${FUNC_NAME} INFO] Setting up triggers for Tracker module...`);
     try { // Assumes createTimeDrivenTrigger & createOrVerifyStaleRejectTrigger are in Triggers.gs
-        if (createTimeDrivenTrigger('processJobApplicationEmails', 1)) messages.push("Trigger 'processJobApplicationEmails': CREATED."); 
-        else messages.push("Trigger 'processJobApplicationEmails': Exists/Verified.");
-        if (createOrVerifyStaleRejectTrigger('markStaleApplicationsAsRejected', 2)) messages.push("Trigger 'markStaleApplicationsAsRejected': CREATED."); 
-        else messages.push("Trigger 'markStaleApplicationsAsRejected': Exists/Verified.");
-        
-
+        if (createTimeDrivenTrigger('processEmailsAndMarkStale', 1)) messages.push("Trigger 'processEmailsAndMarkStale': CREATED.");
+        else messages.push("Trigger 'processEmailsAndMarkStale': Exists/Verified.");
     } catch(e) {
         Logger.log(`[${FUNC_NAME} ERROR] Trigger setup failed: ${e.toString()}`);
         messages.push(`Trigger setup FAILED: ${e.message}.`);
@@ -339,14 +358,25 @@ function initialSetup_LabelsAndSheet(activeSS) {
   return { success: moduleSuccess, messages: messages };
 }
 
+function processEmailsAndMarkStale() {
+    const { spreadsheet: ss } = getOrCreateSpreadsheetAndSheet();
+    if (!ss) {
+        Logger.log(`[processEmailsAndMarkStale FATAL ERROR] Main spreadsheet could not be accessed. Aborting.`);
+        return;
+    }
+    const scriptProperties = PropertiesService.getScriptProperties();
+    processJobApplicationEmails(ss, scriptProperties);
+    markStaleApplicationsAsRejected(ss);
+}
+
+
 // --- Main Email Processing Function (Job Application Tracker) ---
-function processJobApplicationEmails() {
+function processJobApplicationEmails(ss, scriptProperties) {
     const FUNC_NAME = "processJobApplicationEmails";
     const SCRIPT_START_TIME = new Date();
     Logger.log(`\n==== ${FUNC_NAME}: STARTING (${SCRIPT_START_TIME.toLocaleString()}) ====`);
 
     // --- 1. Configuration & Get Spreadsheet/Sheet ---
-    const scriptProperties = PropertiesService.getScriptProperties();
     const geminiApiKey = scriptProperties.getProperty(GEMINI_API_KEY_PROPERTY);
     let useGemini = false;
 
@@ -368,7 +398,6 @@ function processJobApplicationEmails() {
         }
     }
 
-    const { spreadsheet: ss } = getOrCreateSpreadsheetAndSheet();
     if (!ss) {
         Logger.log(`[${FUNC_NAME} FATAL ERROR] Main spreadsheet could not be accessed. Aborting.`);
         return;
@@ -407,50 +436,8 @@ function processJobApplicationEmails() {
         return;
     }
 
-    const lastR = dataSheet.getLastRow();
-    const existingDataCache = {};
-    const processedEmailIds = new Set();
     const dataToUpdate = [];
     const newRows = [];
-
-    if (lastR >= 2) {
-        Logger.log(`[${FUNC_NAME} INFO] Preloading existing data from "${dataSheet.getName()}" (Rows 2 to ${lastR})...`);
-        try {
-            const range = dataSheet.getRange(2, 1, lastR - 1, dataSheet.getLastColumn());
-            const values = range.getValues();
-            for (let i = 0; i < values.length; i++) {
-                const row = values[i];
-                const emailId = row[EMAIL_ID_COL - 1];
-                if (emailId) {
-                    processedEmailIds.add(String(emailId).trim());
-                }
-                const company = row[COMPANY_COL - 1];
-                if (company) {
-                    const companyLc = String(company).toLowerCase();
-                    if (companyLc && companyLc !== MANUAL_REVIEW_NEEDED.toLowerCase() && companyLc !== 'n/a') {
-                        if (!existingDataCache[companyLc]) {
-                            existingDataCache[companyLc] = [];
-                        }
-                        existingDataCache[companyLc].push({
-                            rowNum: i + 2,
-                            rowData: row,
-                            emailId: emailId,
-                            company: company,
-                            title: row[JOB_TITLE_COL - 1],
-                            status: row[STATUS_COL - 1],
-                            peakStatus: row[PEAK_STATUS_COL - 1]
-                        });
-                    }
-                }
-            }
-            Logger.log(`[${FUNC_NAME} INFO] Preload complete. Cached ${Object.keys(existingDataCache).length} companies, ${processedEmailIds.size} processed email IDs.`);
-        } catch (e) {
-            Logger.log(`[${FUNC_NAME} FATAL ERROR] Preloading data: ${e.toString()}\nStack:${e.stack}. Aborting.`);
-            return;
-        }
-    } else {
-        Logger.log(`[${FUNC_NAME} INFO] Applications sheet empty. No data preloaded.`);
-    }
 
     const THREAD_PROCESSING_LIMIT = 20;
     let threadsToProcess = [];
@@ -465,6 +452,7 @@ function processJobApplicationEmails() {
     const messagesToSort = [];
     let skippedKnownProcessedCount = 0;
     let messageFetchErrorCount = 0;
+    const processedEmailIds = new Set();
     for (const thread of threadsToProcess) {
         const threadId = thread.getId();
         try {
@@ -548,7 +536,7 @@ function processJobApplicationEmails() {
 
             if (useGemini && plainBodyText && plainBodyText.trim() !== "") {
                 const geminiResult = callGemini_forApplicationDetails(emailSubject, plainBodyText, geminiApiKey);
-                if (geminiResult) {
+                if (geminiResult && !geminiResult.error) {
                     companyName = geminiResult.company || MANUAL_REVIEW_NEEDED;
                     jobTitle = geminiResult.title || MANUAL_REVIEW_NEEDED;
                     applicationStatus = geminiResult.status;
@@ -559,7 +547,7 @@ function processJobApplicationEmails() {
                         else if (!applicationStatus && keywordStatus === DEFAULT_STATUS) applicationStatus = DEFAULT_STATUS;
                     }
                 } else {
-                    Logger.log(`[${FUNC_NAME} WARN] Gemini call failed for Msg ${msgId}. Fallback regex.`);
+                    Logger.log(`[${FUNC_NAME} WARN] Gemini call failed for Msg ${msgId}. Error: ${geminiResult.error} Fallback regex.`);
                     const regexResult = extractCompanyAndTitle(message, detectedPlatform, emailSubject, plainBodyText);
                     companyName = regexResult.company;
                     jobTitle = regexResult.title;
@@ -575,12 +563,11 @@ function processJobApplicationEmails() {
 
             requiresManualReview = (companyName === MANUAL_REVIEW_NEEDED || jobTitle === MANUAL_REVIEW_NEEDED);
             const finalStatusToSet = applicationStatus || DEFAULT_STATUS;
-            const companyCacheKey = (companyName !== MANUAL_REVIEW_NEEDED) ? companyName.toLowerCase() : `_manual_review_placeholder_${msgId}`;
             let existingRowInfoToUpdate = null;
             let targetSheetRowForUpdate = -1;
 
-            if (companyName !== MANUAL_REVIEW_NEEDED && existingDataCache[companyCacheKey]) {
-                const potentialMatches = existingDataCache[companyCacheKey];
+            if (companyName !== MANUAL_REVIEW_NEEDED) {
+                const potentialMatches = findRowsByCompanyName(dataSheet, companyName);
                 if (jobTitle !== MANUAL_REVIEW_NEEDED) {
                     existingRowInfoToUpdate = potentialMatches.find(e => e.title && e.title.toLowerCase() === jobTitle.toLowerCase());
                 }
@@ -695,6 +682,31 @@ function processJobApplicationEmails() {
         Utilities.sleep(200 + Math.floor(Math.random() * 100));
     }
 
+    function findRowsByCompanyName(dataSheet, companyName) {
+        if (!companyName || companyName === MANUAL_REVIEW_NEEDED) {
+            return [];
+        }
+        const companyNameLc = companyName.toLowerCase();
+        const data = dataSheet.getDataRange().getValues();
+        const matchingRows = [];
+        for (let i = 1; i < data.length; i++) {
+            const row = data[i];
+            const sheetCompanyName = row[COMPANY_COL - 1];
+            if (sheetCompanyName && String(sheetCompanyName).toLowerCase() === companyNameLc) {
+                matchingRows.push({
+                    rowNum: i + 1,
+                    rowData: row,
+                    emailId: row[EMAIL_ID_COL - 1],
+                    company: sheetCompanyName,
+                    title: row[JOB_TITLE_COL - 1],
+                    status: row[STATUS_COL - 1],
+                    peakStatus: row[PEAK_STATUS_COL - 1]
+                });
+            }
+        }
+        return matchingRows;
+    }
+
     if (dataToUpdate.length > 0) {
         dataToUpdate.forEach(update => {
             dataSheet.getRange(update.row, 1, 1, update.values.length).setValues([update.values]);
@@ -721,14 +733,13 @@ function processJobApplicationEmails() {
 
 
 // --- Auto-Reject Stale Applications Function ---
-function markStaleApplicationsAsRejected() {
+function markStaleApplicationsAsRejected(ss) {
   const FUNC_NAME = "markStaleApplicationsAsRejected";
   const SCRIPT_START_TIME = new Date();
   Logger.log(`\n==== ${FUNC_NAME}: START (${SCRIPT_START_TIME.toLocaleString()}) ====`);
   
-  const { spreadsheet: ss } = getOrCreateSpreadsheetAndSheet(); // From SheetUtils.gs
   if (!ss) {
-    Logger.log(`[${FUNC_NAME} FATAL ERROR] Main spreadsheet access failed. Aborting.`);
+    Logger.log(`[${FUNC_NAME} FATAL ERROR] Main spreadsheet not passed. Aborting.`);
     return;
   }
 
@@ -878,9 +889,8 @@ function onOpen(e) {
       .addItem('Setup: Job Leads Tracker', 'runInitialSetup_JobLeadsModule'));
   menu.addSeparator();
   menu.addSubMenu(ui.createMenu('Manual Processing')
-      .addItem('📧 Process Application Emails', 'processJobApplicationEmails')
-      .addItem('📬 Process Job Leads', 'processJobLeads')
-      .addItem('🗑️ Mark Stale Applications', 'markStaleApplicationsAsRejected'));
+      .addItem('📧 Process Application Emails', 'processEmailsAndMarkStale')
+      .addItem('📬 Process Job Leads', 'processJobLeads'));
   menu.addSeparator();
   menu.addSubMenu(ui.createMenu('Admin & Config')
       .addItem('🔑 Set Gemini API Key', 'setSharedGeminiApiKey_UI')

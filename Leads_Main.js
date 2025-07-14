@@ -102,20 +102,20 @@ function runInitialSetup_JobLeadsModule(passedSpreadsheet) {
         setupMessages.push("Leads Filter: Exists."); 
     }
     
-    // --- Step 3: Store Configuration (UserProperties for label IDs) ---
-    const userPropsLeads = PropertiesService.getUserProperties();
-    if (needsProcessLeadLabelId) userPropsLeads.setProperty(LEADS_USER_PROPERTY_TO_PROCESS_LABEL_ID, needsProcessLeadLabelId); else leadsModuleSetupSuccess = false;
+    // --- Step 3: Store Configuration (ScriptProperties for label IDs) ---
+    const scriptPropsLeads = PropertiesService.getScriptProperties();
+    if (needsProcessLeadLabelId) scriptPropsLeads.setProperty(LEADS_USER_PROPERTY_TO_PROCESS_LABEL_ID, needsProcessLeadLabelId); else leadsModuleSetupSuccess = false;
     
     let doneProcessLeadLabelId = null;
     if(doneProcessLabelObject) { // Get ID for "Processed" label
         const doneLabelInfoLeads = labelsListRespLeads.labels?.find(l => l.name === LEADS_GMAIL_LABEL_PROCESSED);
         if (doneLabelInfoLeads?.id) {
              doneProcessLeadLabelId = doneLabelInfoLeads.id;
-             userPropsLeads.setProperty(LEADS_USER_PROPERTY_PROCESSED_LABEL_ID, doneProcessLeadLabelId);
+             scriptPropsLeads.setProperty(LEADS_USER_PROPERTY_PROCESSED_LABEL_ID, doneProcessLeadLabelId);
         }
     }
     if (!doneProcessLeadLabelId) leadsModuleSetupSuccess = false; // Critical if ID not found/stored for processing
-    setupMessages.push(`UserProperties for Leads labels updated (ToProcessID: ${needsProcessLeadLabelId}, ProcessedID: ${doneProcessLeadLabelId}).`);
+    setupMessages.push(`ScriptProperties for Leads labels updated (ToProcessID: ${needsProcessLeadLabelId}, ProcessedID: ${doneProcessLeadLabelId}).`);
 
     // --- Step 4: Create Time-Driven Trigger ---
     if (createTimeDrivenTrigger('processJobLeads', 3)) { // Assumed in Triggers.gs, runs every 3 hours
@@ -137,176 +137,200 @@ function runInitialSetup_JobLeadsModule(passedSpreadsheet) {
  * Processes emails labeled for job leads.
  */
 function processJobLeads() {
-  const FUNC_NAME = "processJobLeads";
-  const SCRIPT_START_TIME = new Date();
-  Logger.log(`\n==== ${FUNC_NAME}: STARTING (${SCRIPT_START_TIME.toLocaleString()}) ====`);
+    const FUNC_NAME = "processJobLeads";
+    const SCRIPT_START_TIME = new Date();
+    Logger.log(`\n==== ${FUNC_NAME}: STARTING (${SCRIPT_START_TIME.toLocaleString()}) ====`);
 
-  // --- 1. Configuration & Get Spreadsheet/Sheet ---
-  const scriptProperties = PropertiesService.getScriptProperties(); // Changed from UserProperties
-  const geminiApiKey = scriptProperties.getProperty(GEMINI_API_KEY_PROPERTY); // From Config.gs
+    const scriptProperties = PropertiesService.getScriptProperties();
+    const geminiApiKey = scriptProperties.getProperty(GEMINI_API_KEY_PROPERTY);
 
-  if (geminiApiKey) {
-    Logger.log(`[${FUNC_NAME} DEBUG_API_KEY] Retrieved key for "${GEMINI_API_KEY_PROPERTY}" from ScriptProperties. Value (masked): ${geminiApiKey.substring(0,4)}...${geminiApiKey.substring(geminiApiKey.length-4)}`);
-    if (geminiApiKey.trim() !== "" && geminiApiKey.startsWith("AIza") && geminiApiKey.length > 30) {
-        Logger.log(`[${FUNC_NAME} INFO] Gemini API Key (ScriptProperties) is valid for Leads processing.`);
+    if (geminiApiKey) {
+        Logger.log(`[${FUNC_NAME} DEBUG_API_KEY] Retrieved key for "${GEMINI_API_KEY_PROPERTY}" from ScriptProperties. Value (masked): ${geminiApiKey.substring(0, 4)}...${geminiApiKey.substring(geminiApiKey.length - 4)}`);
+        if (geminiApiKey.trim() !== "" && geminiApiKey.startsWith("AIza") && geminiApiKey.length > 30) {
+            Logger.log(`[${FUNC_NAME} INFO] Gemini API Key (ScriptProperties) is valid for Leads processing.`);
+        } else {
+            Logger.log(`[${FUNC_NAME} WARN] Gemini API Key (ScriptProperties) found but INvalid. callGemini_forJobLeads might use mock data or fail if this key is passed without its own internal placeholder check.`);
+            Logger.log(`[${FUNC_NAME} DEBUG_API_KEY] Reason: Key failed validation. Length: ${geminiApiKey.length}, StartsWith AIza: ${geminiApiKey.startsWith("AIza")}`);
+        }
     } else {
-        Logger.log(`[${FUNC_NAME} WARN] Gemini API Key (ScriptProperties) found but INvalid. callGemini_forJobLeads might use mock data or fail if this key is passed without its own internal placeholder check.`);
-        Logger.log(`[${FUNC_NAME} DEBUG_API_KEY] Reason: Key failed validation. Length: ${geminiApiKey.length}, StartsWith AIza: ${geminiApiKey.startsWith("AIza")}`);
-        // The callGemini_forJobLeads function has a mock fallback if API key is placeholder-like
-    }
-  } else {
-    Logger.log(`[${FUNC_NAME} WARN] Gemini API Key NOT FOUND in ScriptProperties for "${GEMINI_API_KEY_PROPERTY}". callGemini_forJobLeads will use mock/fail.`);
-  }
-
-  const { spreadsheet: activeSS } = getOrCreateSpreadsheetAndSheet(); // From SheetUtils.gs
-  if (!activeSS) {
-    Logger.log(`[${FUNC_NAME} FATAL ERROR] Main spreadsheet could not be determined. Aborting.`);
-    return;
-  }
-
-  const { sheet: leadsDataSheet, headerMap: leadsHeaderMap } = getSheetAndHeaderMapping_forLeads(activeSS.getId(), LEADS_SHEET_TAB_NAME); // From Leads_SheetUtils.gs
-  if (!leadsDataSheet || !leadsHeaderMap || Object.keys(leadsHeaderMap).length === 0) { 
-    Logger.log(`[${FUNC_NAME} FATAL ERROR] Leads sheet "${LEADS_SHEET_TAB_NAME}" or headers not found/mapped in SS ID ${activeSS.getId()}. Aborting.`); 
-    return; 
-  }
-  Logger.log(`[${FUNC_NAME} INFO] Processing leads against: "${activeSS.getName()}", Leads Tab: "${leadsDataSheet.getName()}"`);
-
-  // --- Get Gmail Labels ---
-  const needsProcessLabelName = LEADS_GMAIL_LABEL_TO_PROCESS; // From Config.gs
-  const doneProcessLabelName = LEADS_GMAIL_LABEL_PROCESSED;   // From Config.gs
-  
-  const needsProcessLabel = GmailApp.getUserLabelByName(needsProcessLabelName);
-  const doneProcessLabel = GmailApp.getUserLabelByName(doneProcessLabelName); 
-  if (!needsProcessLabel) { Logger.log(`[${FUNC_NAME} FATAL ERROR] Label "${needsProcessLabelName}" not found. Aborting.`); return; }
-  if (!doneProcessLabel) { Logger.log(`[${FUNC_NAME} WARN] Label "${doneProcessLabelName}" not found. Processed leads will only be unlabelled from 'To Process'.`); }
-
-  // --- Preload Processed Email IDs ---
-  const processedLeadEmailIds = getProcessedEmailIdsFromSheet_forLeads(leadsDataSheet, leadsHeaderMap); // From Leads_SheetUtils.gs
-  Logger.log(`[${FUNC_NAME} INFO] Preloaded ${processedLeadEmailIds.size} email IDs already processed for leads.`);
-
-  // --- Fetch and Process Emails ---
-  const LEADS_THREAD_LIMIT = 10; 
-  const LEADS_MESSAGE_LIMIT_PER_RUN = 15;
-  let messagesProcessedThisRunCounter = 0;
-  const leadThreadsToProcess = needsProcessLabel.getThreads(0, LEADS_THREAD_LIMIT);
-  Logger.log(`[${FUNC_NAME} INFO] Found ${leadThreadsToProcess.length} threads in "${needsProcessLabelName}".`);
-
-  for (const thread of leadThreadsToProcess) {
-    if (messagesProcessedThisRunCounter >= LEADS_MESSAGE_LIMIT_PER_RUN) { 
-      Logger.log(`[${FUNC_NAME} INFO] Message processing limit (${LEADS_MESSAGE_LIMIT_PER_RUN}) reached for this run.`); 
-      break; 
-    }
-    const scriptRunTimeSeconds = (new Date().getTime() - SCRIPT_START_TIME.getTime()) / 1000;
-    if (scriptRunTimeSeconds > 320) { // ~5min 20sec, leaving buffer for 6min limit
-      Logger.log(`[${FUNC_NAME} WARN] Execution time limit (${scriptRunTimeSeconds}s) approaching. Stopping further thread processing.`); 
-      break; 
+        Logger.log(`[${FUNC_NAME} WARN] Gemini API Key NOT FOUND in ScriptProperties for "${GEMINI_API_KEY_PROPERTY}". callGemini_forJobLeads will use mock/fail.`);
     }
 
-    const messagesInThread = thread.getMessages();
-    let threadContainedAtLeastOneNewMessage = false;
-    let allNewMessagesInThisThreadProcessedSuccessfully = true; // Assume success for new messages in this thread
+    const { spreadsheet: activeSS } = getOrCreateSpreadsheetAndSheet();
+    if (!activeSS) {
+        Logger.log(`[${FUNC_NAME} FATAL ERROR] Main spreadsheet could not be determined. Aborting.`);
+        return;
+    }
 
-    for (const message of messagesInThread) {
-      if (messagesProcessedThisRunCounter >= LEADS_MESSAGE_LIMIT_PER_RUN) break; // Check limit per message too
-      
-      const msgId = message.getId();
-      if (processedLeadEmailIds.has(msgId)) { // Check against preloaded IDs
-        if (DEBUG_MODE) Logger.log(`[${FUNC_NAME} DEBUG] Msg ID ${msgId} in thread ${thread.getId()} already processed. Skipping.`);
-        continue; 
-      }
-      
-      threadContainedAtLeastOneNewMessage = true; 
-      Logger.log(`\n--- [${FUNC_NAME}] Processing NEW Lead Msg ID: ${msgId}, Thread: ${thread.getId()}, Subject: "${message.getSubject()}" ---`);
-      messagesProcessedThisRunCounter++;
-      let currentMessageHandledNoErrors = false; 
+    const { sheet: leadsDataSheet, headerMap: leadsHeaderMap } = getSheetAndHeaderMapping_forLeads(activeSS.getId(), LEADS_SHEET_TAB_NAME);
+    if (!leadsDataSheet || !leadsHeaderMap || Object.keys(leadsHeaderMap).length === 0) {
+        Logger.log(`[${FUNC_NAME} FATAL ERROR] Leads sheet "${LEADS_SHEET_TAB_NAME}" or headers not found/mapped in SS ID ${activeSS.getId()}. Aborting.`);
+        return;
+    }
+    Logger.log(`[${FUNC_NAME} INFO] Processing leads against: "${activeSS.getName()}", Leads Tab: "${leadsDataSheet.getName()}"`);
 
-      try {
-        let emailBody = message.getPlainBody();
-        if (typeof emailBody !== 'string' || emailBody.trim() === "") {
-          Logger.log(`[${FUNC_NAME} WARN] Msg ${msgId}: Body is empty or not a string. Skipping AI call for this message.`);
-          // Not writing an error to sheet, just skipping this specific message for AI processing.
-          // If all other messages in thread are fine, thread can still be marked done.
-          currentMessageHandledNoErrors = true; // Considered "handled" as there's nothing to parse
-          processedLeadEmailIds.add(msgId); // Add to set to avoid re-processing this empty message
-          continue; 
+    const needsProcessLabelName = LEADS_GMAIL_LABEL_TO_PROCESS;
+    const doneProcessLabelName = LEADS_GMAIL_LABEL_PROCESSED;
+
+    const needsProcessLabel = GmailApp.getUserLabelByName(needsProcessLabelName);
+    const doneProcessLabel = GmailApp.getUserLabelByName(doneProcessLabelName);
+    if (!needsProcessLabel) {
+        Logger.log(`[${FUNC_NAME} FATAL ERROR] Label "${needsProcessLabelName}" not found. Aborting.`);
+        return;
+    }
+    if (!doneProcessLabel) {
+        Logger.log(`[${FUNC_NAME} WARN] Label "${doneProcessLabelName}" not found. Processed leads will only be unlabelled from 'To Process'.`);
+    }
+
+    const processedLeadEmailIds = getProcessedEmailIdsFromSheet_forLeads(leadsDataSheet, leadsHeaderMap);
+    Logger.log(`[${FUNC_NAME} INFO] Preloaded ${processedLeadEmailIds.size} email IDs already processed for leads.`);
+
+    const LEADS_THREAD_LIMIT = 10;
+    const LEADS_MESSAGE_LIMIT_PER_RUN = 15;
+    let messagesProcessedThisRunCounter = 0;
+    const leadThreadsToProcess = needsProcessLabel.getThreads(0, LEADS_THREAD_LIMIT);
+    Logger.log(`[${FUNC_NAME} INFO] Found ${leadThreadsToProcess.length} threads in "${needsProcessLabelName}".`);
+
+    const newJobs = [];
+
+    for (const thread of leadThreadsToProcess) {
+        if (messagesProcessedThisRunCounter >= LEADS_MESSAGE_LIMIT_PER_RUN) {
+            Logger.log(`[${FUNC_NAME} INFO] Message processing limit (${LEADS_MESSAGE_LIMIT_PER_RUN}) reached for this run.`);
+            break;
+        }
+        const scriptRunTimeSeconds = (new Date().getTime() - SCRIPT_START_TIME.getTime()) / 1000;
+        if (scriptRunTimeSeconds > 320) {
+            Logger.log(`[${FUNC_NAME} WARN] Execution time limit (${scriptRunTimeSeconds}s) approaching. Stopping further thread processing.`);
+            break;
         }
 
-        // geminiApiKey is passed to callGemini_forJobLeads, which might use mock data if key is invalid/placeholder
-        const geminiApiResponse = callGemini_forJobLeads(emailBody, geminiApiKey); // From GeminiService.gs
-        
-        if (geminiApiResponse && geminiApiResponse.success) {
-          const extractedJobsArray = parseGeminiResponse_forJobLeads(geminiApiResponse.data); // From GeminiService.gs
-          if (extractedJobsArray && extractedJobsArray.length > 0) {
-            Logger.log(`[${FUNC_NAME} INFO] Gemini extracted ${extractedJobsArray.length} job(s) from msg ${msgId}.`);
-            let atLeastOneValidJobWrittenThisMessage = false;
-            for (const jobData of extractedJobsArray) {
-              if (jobData && jobData.jobTitle && String(jobData.jobTitle).toLowerCase() !== 'n/a' && String(jobData.jobTitle).toLowerCase() !== 'error') {
-                jobData.dateAdded = message.getDate(); 
-                jobData.sourceEmailSubject = message.getSubject().substring(0,500); // Keep this
-                jobData.sourceEmailId = msgId; 
-                jobData.status = "New"; 
-                jobData.processedTimestamp = new Date();
-                
-                writeJobDataToSheet_forLeads(leadsDataSheet, jobData, leadsHeaderMap); // From Leads_SheetUtils.gs
-                atLeastOneGoodJobWrittenThisMessage = true;
-              } else { 
-                if (DEBUG_MODE) Logger.log(`[${FUNC_NAME} DEBUG] Job from msg ${msgId} was N/A/error or missing title. Skipping sheet write: ${JSON.stringify(jobData)}`); 
-              }
+        const messagesInThread = thread.getMessages();
+        let threadContainedAtLeastOneNewMessage = false;
+        let allNewMessagesInThisThreadProcessedSuccessfully = true;
+
+        for (const message of messagesInThread) {
+            if (messagesProcessedThisRunCounter >= LEADS_MESSAGE_LIMIT_PER_RUN) break;
+
+            const msgId = message.getId();
+            if (processedLeadEmailIds.has(msgId)) {
+                if (DEBUG_MODE) Logger.log(`[${FUNC_NAME} DEBUG] Msg ID ${msgId} in thread ${thread.getId()} already processed. Skipping.`);
+                continue;
             }
-            // If at least one job was extracted and written, consider this message "handled successfully" for now.
-            if (atLeastOneValidJobWrittenThisMessage) currentMessageHandledNoErrors = true;
-            else { 
-              Logger.log(`[${FUNC_NAME} INFO] Msg ${msgId}: Gemini success, and parsed jobs, but no valid/writable jobs after filtering. Considered handled.`);
-              currentMessageHandledNoErrors = true; // Gemini worked, parsing worked, just no "good" jobs.
+
+            threadContainedAtLeastOneNewMessage = true;
+            Logger.log(`\n--- [${FUNC_NAME}] Processing NEW Lead Msg ID: ${msgId}, Thread: ${thread.getId()}, Subject: "${message.getSubject()}" ---`);
+            messagesProcessedThisRunCounter++;
+            let currentMessageHandledNoErrors = false;
+
+            try {
+                let emailBody = message.getPlainBody();
+                if (typeof emailBody !== 'string' || emailBody.trim() === "") {
+                    Logger.log(`[${FUNC_NAME} WARN] Msg ${msgId}: Body is empty or not a string. Skipping AI call for this message.`);
+                    currentMessageHandledNoErrors = true;
+                    processedLeadEmailIds.add(msgId);
+                    continue;
+                }
+
+                const geminiApiResponse = callGemini_forJobLeads(emailBody, geminiApiKey);
+
+                if (geminiApiResponse && geminiApiResponse.success) {
+                    const extractedJobsArray = parseGeminiResponse_forJobLeads(geminiApiResponse.data);
+                    if (extractedJobsArray && extractedJobsArray.length > 0) {
+                        Logger.log(`[${FUNC_NAME} INFO] Gemini extracted ${extractedJobsArray.length} job(s) from msg ${msgId}.`);
+                        let atLeastOneValidJobWrittenThisMessage = false;
+                        for (const jobData of extractedJobsArray) {
+                            if (jobData && jobData.jobTitle && String(jobData.jobTitle).toLowerCase() !== 'n/a' && String(jobData.jobTitle).toLowerCase() !== 'error') {
+                                jobData.dateAdded = message.getDate();
+                                jobData.sourceEmailSubject = message.getSubject().substring(0, 500);
+                                jobData.sourceEmailId = msgId;
+                                jobData.status = "New";
+                                jobData.processedTimestamp = new Date();
+                                newJobs.push(jobData);
+                                atLeastOneValidJobWrittenThisMessage = true;
+                            } else {
+                                if (DEBUG_MODE) Logger.log(`[${FUNC_NAME} DEBUG] Job from msg ${msgId} was N/A/error or missing title. Skipping sheet write: ${JSON.stringify(jobData)}`);
+                            }
+                        }
+                        if (atLeastOneValidJobWrittenThisMessage) currentMessageHandledNoErrors = true;
+                        else {
+                            Logger.log(`[${FUNC_NAME} INFO] Msg ${msgId}: Gemini success, and parsed jobs, but no valid/writable jobs after filtering. Considered handled.`);
+                            currentMessageHandledNoErrors = true;
+                        }
+                    } else {
+                        Logger.log(`[${FUNC_NAME} INFO] Msg ${msgId}: Gemini API call success, but parsing response yielded no distinct job listings.`);
+                        currentMessageHandledNoErrors = true;
+                    }
+                } else {
+                    Logger.log(`[${FUNC_NAME} ERROR] Gemini API FAILED for msg ${msgId}. Error: ${geminiApiResponse ? geminiApiResponse.error : 'Null or unexpected API response object'}`);
+                    writeErrorEntryToSheet_forLeads(leadsDataSheet, message, "Gemini API Call Fail (Leads)", geminiApiResponse ? String(geminiApiResponse.error).substring(0, 500) : "Unknown API response error", leadsHeaderMap);
+                    allNewMessagesInThisThreadProcessedSuccessfully = false;
+                }
+            } catch (e) {
+                Logger.log(`[${FUNC_NAME} SCRIPT ERROR] Exception processing Msg ${msgId}: ${e.toString()}\nStack: ${e.stack}`);
+                writeErrorEntryToSheet_forLeads(leadsDataSheet, message, "Script Error (Leads)", String(e.toString()).substring(0, 500), leadsHeaderMap);
+                allNewMessagesInThisThreadProcessedSuccessfully = false;
             }
-          } else { 
-            Logger.log(`[${FUNC_NAME} INFO] Msg ${msgId}: Gemini API call success, but parsing response yielded no distinct job listings.`);
-            currentMessageHandledNoErrors = true; // Gemini worked, nothing to parse = message handled.
-          }
-        } else { // Gemini API call itself failed
-          Logger.log(`[${FUNC_NAME} ERROR] Gemini API FAILED for msg ${msgId}. Error: ${geminiApiResponse ? geminiApiResponse.error : 'Null or unexpected API response object'}`);
-          writeErrorEntryToSheet_forLeads(leadsDataSheet, message, "Gemini API Call Fail (Leads)", geminiApiResponse ? String(geminiApiResponse.error).substring(0,500) : "Unknown API response error", leadsHeaderMap);
-          allNewMessagesInThisThreadProcessedSuccessfully = false; // This message in thread had an API error
-        }
-      } catch (e) { // Catch script errors during processing of this message
-        Logger.log(`[${FUNC_NAME} SCRIPT ERROR] Exception processing Msg ${msgId}: ${e.toString()}\nStack: ${e.stack}`);
-        writeErrorEntryToSheet_forLeads(leadsDataSheet, message, "Script Error (Leads)", String(e.toString()).substring(0,500), leadsHeaderMap);
-        allNewMessagesInThisThreadProcessedSuccessfully = false; // This message in thread had a script error
-      }
 
-      if (currentMessageHandledNoErrors) {
-        processedLeadEmailIds.add(msgId); // Add to our run-time set to avoid re-processing in this same execution.
-                                         // It will be written to sheet only if valid job data was found or if error was logged.
-      }
-      Utilities.sleep(1500 + Math.floor(Math.random() * 1000)); // Be respectful to APIs
-    } // End loop for messages in a thread
+            if (currentMessageHandledNoErrors) {
+                processedLeadEmailIds.add(msgId);
+            }
+            Utilities.sleep(1500 + Math.floor(Math.random() * 1000));
+        }
 
-    // Thread Relabeling Logic
-    if (threadContainedAtLeastOneNewMessage) {
-      if (allNewMessagesInThisThreadProcessedSuccessfully) {
-        if (doneProcessLabel) { 
-          try { thread.removeLabel(needsProcessLabel).addLabel(doneProcessLabel); Logger.log(`[${FUNC_NAME} INFO] Thread ${thread.getId()} successfully processed & moved to "${doneProcessLabelName}".`); }
-          catch (eRelabel) { Logger.log(`[${FUNC_NAME} WARN] Thread ${thread.getId()} relabel (success case) error: ${eRelabel.message}`); }
-        } else { 
-          try { thread.removeLabel(needsProcessLabel); Logger.log(`[${FUNC_NAME} WARN] Thread ${thread.getId()} processed. Removed from "${needsProcessLabelName}", but "Done" label object is missing.`); }
-          catch (eRemOnly) { Logger.log(`[${FUNC_NAME} WARN] Thread ${thread.getId()} removeLabel error: ${eRemOnly.message}`); }
+        if (threadContainedAtLeastOneNewMessage) {
+            if (allNewMessagesInThisThreadProcessedSuccessfully) {
+                if (doneProcessLabel) {
+                    try {
+                        thread.removeLabel(needsProcessLabel).addLabel(doneProcessLabel);
+                        Logger.log(`[${FUNC_NAME} INFO] Thread ${thread.getId()} successfully processed & moved to "${doneProcessLabelName}".`);
+                    } catch (eRelabel) {
+                        Logger.log(`[${FUNC_NAME} WARN] Thread ${thread.getId()} relabel (success case) error: ${eRelabel.message}`);
+                    }
+                } else {
+                    try {
+                        thread.removeLabel(needsProcessLabel);
+                        Logger.log(`[${FUNC_NAME} WARN] Thread ${thread.getId()} processed. Removed from "${needsProcessLabelName}", but "Done" label object is missing.`);
+                    } catch (eRemOnly) {
+                        Logger.log(`[${FUNC_NAME} WARN] Thread ${thread.getId()} removeLabel error: ${eRemOnly.message}`);
+                    }
+                }
+            } else {
+                Logger.log(`[${FUNC_NAME} WARN] Thread ${thread.getId()} contained new messages but encountered errors during processing. NOT moved from "${needsProcessLabelName}". Will be re-attempted.`);
+            }
+        } else if (messagesInThread.length > 0) {
+            Logger.log(`[${FUNC_NAME} INFO] Thread ${thread.getId()} contained only previously processed messages. Ensuring it's labeled correctly.`);
+            if (doneProcessLabel && !thread.getLabels().map(l => l.getName()).includes(doneProcessLabelName)) {
+                try {
+                    thread.removeLabel(needsProcessLabel).addLabel(doneProcessLabel);
+                } catch (eOldDone) {
+                }
+            } else if (!doneProcessLabel) {
+                try {
+                    thread.removeLabel(needsProcessLabel);
+                } catch (eOldRem) {
+                }
+            }
+        } else if (messagesInThread.length === 0) {
+            Logger.log(`[${FUNC_NAME} INFO] Thread ${thread.getId()} was empty. Removing from "${needsProcessLabelName}".`);
+            try {
+                thread.removeLabel(needsProcessLabel);
+            } catch (eEmptyThread) { /*Minor*/
+            }
         }
-      } else {
-        Logger.log(`[${FUNC_NAME} WARN] Thread ${thread.getId()} contained new messages but encountered errors during processing. NOT moved from "${needsProcessLabelName}". Will be re-attempted.`);
-      }
-    } else if (messagesInThread.length > 0) { // Thread had messages, but all were already processed (found in processedLeadEmailIds set)
-        Logger.log(`[${FUNC_NAME} INFO] Thread ${thread.getId()} contained only previously processed messages. Ensuring it's labeled correctly.`);
-        if (doneProcessLabel && !thread.getLabels().map(l=>l.getName()).includes(doneProcessLabelName)) {
-            try { thread.removeLabel(needsProcessLabel).addLabel(doneProcessLabel); } catch (eOldDone) {}
-        } else if (!doneProcessLabel) {
-            try { thread.removeLabel(needsProcessLabel); } catch (eOldRem) {}
-        }
-    } else if (messagesInThread.length === 0) { // Empty thread
-        Logger.log(`[${FUNC_NAME} INFO] Thread ${thread.getId()} was empty. Removing from "${needsProcessLabelName}".`);
-        try { thread.removeLabel(needsProcessLabel); } catch(eEmptyThread) {/*Minor*/}
+        Utilities.sleep(500);
     }
-    Utilities.sleep(500); // Pause between threads
-  } // End loop for threads
-  
-  Logger.log(`\n==== ${FUNC_NAME}: FINISHED (${new Date().toLocaleString()}) === Messages Attempted This Run: ${messagesProcessedThisRunCounter}. Total Time: ${(new Date().getTime() - SCRIPT_START_TIME.getTime())/1000}s ====`);
+
+    if (newJobs.length > 0) {
+        const rows = newJobs.map(job => {
+            const row = [];
+            for (const header of LEADS_SHEET_HEADERS) {
+                row.push(job[header] || "");
+            }
+            return row;
+        });
+        leadsDataSheet.getRange(leadsDataSheet.getLastRow() + 1, 1, rows.length, LEADS_SHEET_HEADERS.length).setValues(rows);
+        Logger.log(`[${FUNC_NAME} INFO] Batch appended ${newJobs.length} new jobs to the sheet.`);
+    }
+
+    Logger.log(`\n==== ${FUNC_NAME}: FINISHED (${new Date().toLocaleString()}) === Messages Attempted This Run: ${messagesProcessedThisRunCounter}. Total Time: ${(new Date().getTime() - SCRIPT_START_TIME.getTime()) / 1000}s ====`);
 }

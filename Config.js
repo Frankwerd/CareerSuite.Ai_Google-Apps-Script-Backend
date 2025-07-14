@@ -18,6 +18,7 @@ const TARGET_SPREADSHEET_FILENAME = "CareerSuite.AI Data"; // Used by WebApp if 
 
 // --- TEMPLATE IDs (CRITICAL - MUST BE SET MANUALLY BY THE DEPLOYER) ---
 // ID of the Master Template Google Sheet (the one users will copy)
+const SPREADSHEET_ID_KEY = 'spreadsheetId';
 const TEMPLATE_SHEET_ID = "12jj5lTyu_MzA6KBkfD-30mj-KYHaX-BjouFMtPIIzFc"; // REPLACE WITH YOUR TEMPLATE SHEET ID
 // ID of the Master Script Project (bound to the template sheet above)
 // This is typically found in Project Settings -> Script ID
@@ -127,6 +128,13 @@ const FINAL_STATUSES_FOR_STALE_CHECK = new Set([
 ]);
 const WEEKS_THRESHOLD = 8; // Number of weeks after which an application is considered stale if not in a final status.
 
+// --- Keyword Matching for Status Parsing ---
+const OFFER_KEYWORDS = ["offer", "job offer", "offer of employment", "pleased to offer"];
+const INTERVIEW_KEYWORDS = ["interview", "invitation to interview", "schedule an interview", "interview request", "like to speak with you", "let's chat", "connect with you"];
+const ASSESSMENT_KEYWORDS = ["assessment", "coding challenge", "technical test", "skills test", "take-home assignment"];
+const APPLICATION_VIEWED_KEYWORDS = ["application was viewed", "profile was viewed", "application has been reviewed"];
+const REJECTION_KEYWORDS = ["not moving forward", "unfortunately", "decided not to proceed", "other candidates", "regret to inform", "filled the position"];
+
 // --- Gmail Configuration (Job Application Tracker) ---
 const MASTER_GMAIL_LABEL_PARENT = "CareerSuite.AI"; // Parent for all app-related labels
 const TRACKER_GMAIL_LABEL_PARENT = `${MASTER_GMAIL_LABEL_PARENT}/Applications`;
@@ -155,6 +163,7 @@ const LEADS_GMAIL_FILTER_QUERY = `(subject:("job alert" OR "jobs for you" OR "ne
 
 // --- Platform Detection Keywords (from email body/sender) ---
 // Maps keywords found in sender email addresses to platform names.
+const IGNORED_DOMAINS = new Set(['.io', '.com', '.net', '.org']);
 const PLATFORM_DOMAIN_KEYWORDS = {
   "linkedin.com": "LinkedIn",
   "indeed.com": "Indeed",
@@ -179,7 +188,7 @@ const HELPER_SHEET_COLUMN_WIDTHS = [150, 70, 180, 120, 100, 200, 100, 150, 100];
 
 // --- Gemini API Configuration ---
 const GEMINI_API_KEY_PROPERTY = 'GEMINI_API_KEY'; // UserProperty key for storing the user's Gemini API key.
-const GEMINI_API_ENDPOINT_TEXT_ONLY = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent";
+const GEMINI_API_ENDPOINT_TEXT_ONLY = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-lite-preview-06-17:generateContent";
 
 // Default instructions for Gemini (Job Application Parsing)
 const GEMINI_SYSTEM_INSTRUCTION_APP_TRACKER = `

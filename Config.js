@@ -18,6 +18,7 @@ const TARGET_SPREADSHEET_FILENAME = "CareerSuite.AI Data"; // Used by WebApp if 
 
 // --- TEMPLATE IDs (CRITICAL - MUST BE SET MANUALLY BY THE DEPLOYER) ---
 // ID of the Master Template Google Sheet (the one users will copy)
+const SPREADSHEET_ID_KEY = 'spreadsheetId';
 const TEMPLATE_SHEET_ID = "12jj5lTyu_MzA6KBkfD-30mj-KYHaX-BjouFMtPIIzFc"; // REPLACE WITH YOUR TEMPLATE SHEET ID
 // ID of the Master Script Project (bound to the template sheet above)
 // This is typically found in Project Settings -> Script ID

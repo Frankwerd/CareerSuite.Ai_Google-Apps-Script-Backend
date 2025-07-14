@@ -164,7 +164,17 @@ function setupSheetFormatting(sheet, headersArray, columnWidthsArray, applyBandi
 // (the one NOT named _Fallback)
 function getOrCreateSpreadsheetAndSheet() {
   let ss = null;
-  const FUNC_NAME = "getOrCreateSpreadsheetAndSheet"; 
+  const FUNC_NAME = "getOrCreateSpreadsheetAndSheet";
+  const spreadsheetId = PropertiesService.getScriptProperties().getProperty(SPREADSHEET_ID_KEY);
+  if (spreadsheetId) {
+    try {
+      ss = SpreadsheetApp.openById(spreadsheetId);
+      Logger.log(`[${FUNC_NAME} INFO] Opened spreadsheet by stored ID: ${spreadsheetId}`);
+      return { spreadsheet: ss };
+    } catch (e) {
+      Logger.log(`[${FUNC_NAME} ERROR] Failed to open spreadsheet by stored ID: ${spreadsheetId}. Error: ${e.message}. Fallback to other methods.`);
+    }
+  }
 
   if (FIXED_SPREADSHEET_ID && FIXED_SPREADSHEET_ID.trim() !== "" && FIXED_SPREADSHEET_ID !== "YOUR_MASTER_TEMPLATE_SHEET_ID_GOES_HERE") {
     Logger.log(`[${FUNC_NAME} INFO] Attempting to open by Fixed ID: "${FIXED_SPREADSHEET_ID}"`);

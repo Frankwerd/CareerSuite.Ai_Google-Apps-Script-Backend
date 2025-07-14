@@ -43,7 +43,7 @@ function runFullProjectInitialSetup(passedSpreadsheet) {
     Logger.log(errorMsg);
     return { success: false, message: errorMsg, detailedMessages: [errorMsg], sheetId: null, sheetUrl: null };
   }
-
+  PropertiesService.getScriptProperties().setProperty(SPREADSHEET_ID_KEY, activeSS.getId());
   // --- TEMPLATE CHECK ---
   // TEMPLATE_SHEET_ID must be defined in Config.js
   if (typeof TEMPLATE_SHEET_ID !== 'undefined' && TEMPLATE_SHEET_ID !== "" && activeSS.getId() === TEMPLATE_SHEET_ID) {

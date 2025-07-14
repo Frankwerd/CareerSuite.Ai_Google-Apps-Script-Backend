@@ -302,18 +302,6 @@ function initialSetup_LabelsAndSheet(activeSS) {
     } catch(e) { Logger.log(`[${FUNC_NAME} WARN] Failed adding dummy data: ${e.message}`); messages.push("Dummy data add FAILED.");}
   }
 
-    // --- D. Update Dashboard Metrics ---
-  if (moduleSuccess && dashboardSheet && helperSheet && dataSh ) { 
-    Logger.log(`[${FUNC_NAME} INFO] Ensuring dashboard charts are built/updated based on formula-driven helper data...`);
-    try { 
-      // Pass all sheets just in case, though applicationsSheet might not be directly used by the new updateDashboardMetrics for populating helper
-      updateDashboardMetrics(dashboardSheet, helperSheet, dataSh); 
-      messages.push("Dashboard Charts: Update/Creation attempted."); 
-    } catch (e) { 
-      Logger.log(`[${FUNC_NAME} ERROR] updateDashboardMetrics call failed: ${e.toString()}`); 
-      messages.push(`Dashboard Charts update FAILED: ${e.message}.`);
-    }
-  }
 
   // --- E. Remove Dummy Data ---
   if (moduleSuccess && dummyDataWasAdded && dataSh && dummyRows.length > 0) {
@@ -363,275 +351,382 @@ function initialSetup_LabelsAndSheet(activeSS) {
 
 // --- Main Email Processing Function (Job Application Tracker) ---
 function processJobApplicationEmails() {
-  const FUNC_NAME = "processJobApplicationEmails";
-  const SCRIPT_START_TIME = new Date();
-  Logger.log(`\n==== ${FUNC_NAME}: STARTING (${SCRIPT_START_TIME.toLocaleString()}) ====`);
+    const FUNC_NAME = "processJobApplicationEmails";
+    const SCRIPT_START_TIME = new Date();
+    Logger.log(`\n==== ${FUNC_NAME}: STARTING (${SCRIPT_START_TIME.toLocaleString()}) ====`);
 
-  // --- 1. Configuration & Get Spreadsheet/Sheet ---
-  const scriptProperties = PropertiesService.getScriptProperties(); // Changed from UserProperties
-  const geminiApiKey = scriptProperties.getProperty(GEMINI_API_KEY_PROPERTY); // GEMINI_API_KEY_PROPERTY from Config.gs
-  let useGemini = false;
+    // --- 1. Configuration & Get Spreadsheet/Sheet ---
+    const scriptProperties = PropertiesService.getScriptProperties();
+    const geminiApiKey = scriptProperties.getProperty(GEMINI_API_KEY_PROPERTY);
+    let useGemini = false;
 
-  // Add detailed logging for the key retrieval
-  if (geminiApiKey) {
-    Logger.log(`[${FUNC_NAME} DEBUG_API_KEY] Retrieved key for "${GEMINI_API_KEY_PROPERTY}" from ScriptProperties. Value (masked): ${geminiApiKey.substring(0,4)}...${geminiApiKey.substring(geminiApiKey.length-4)}`);
-  } else {
-    Logger.log(`[${FUNC_NAME} DEBUG_API_KEY] NO key found for "${GEMINI_API_KEY_PROPERTY}" in ScriptProperties.`);
-  }
-
-  if (geminiApiKey && geminiApiKey.trim() !== "" && geminiApiKey.startsWith("AIza") && geminiApiKey.length > 30) {
-    useGemini = true;
-    Logger.log(`[${FUNC_NAME} INFO] Gemini API Key found in ScriptProperties and appears valid. AI parsing enabled.`);
-  } else {
-    Logger.log(`[${FUNC_NAME} WARN] Gemini API Key from ScriptProperties missing or invalid. Fallback to regex parsing.`);
-    if (!geminiApiKey) {
-        Logger.log(`[${FUNC_NAME} DEBUG_API_KEY] Reason: geminiApiKey is null or undefined after fetching from ScriptProperties.`);
+    if (geminiApiKey) {
+        Logger.log(`[${FUNC_NAME} DEBUG_API_KEY] Retrieved key for "${GEMINI_API_KEY_PROPERTY}" from ScriptProperties. Value (masked): ${geminiApiKey.substring(0, 4)}...${geminiApiKey.substring(geminiApiKey.length - 4)}`);
     } else {
-        Logger.log(`[${FUNC_NAME} DEBUG_API_KEY] Reason: Key found in UserProperties but failed validation. Length: ${geminiApiKey.length}, StartsWith AIza: ${geminiApiKey.startsWith("AIza")}`);
+        Logger.log(`[${FUNC_NAME} DEBUG_API_KEY] NO key found for "${GEMINI_API_KEY_PROPERTY}" in ScriptProperties.`);
     }
-  }
 
-  const { spreadsheet: ss } = getOrCreateSpreadsheetAndSheet(); // From SheetUtils.gs
-  if (!ss) {
-    Logger.log(`[${FUNC_NAME} FATAL ERROR] Main spreadsheet could not be accessed. Aborting.`);
-    return;
-  }
+    if (geminiApiKey && geminiApiKey.trim() !== "" && geminiApiKey.startsWith("AIza") && geminiApiKey.length > 30) {
+        useGemini = true;
+        Logger.log(`[${FUNC_NAME} INFO] Gemini API Key found in ScriptProperties and appears valid. AI parsing enabled.`);
+    } else {
+        Logger.log(`[${FUNC_NAME} WARN] Gemini API Key from ScriptProperties missing or invalid. Fallback to regex parsing.`);
+        if (!geminiApiKey) {
+            Logger.log(`[${FUNC_NAME} DEBUG_API_KEY] Reason: geminiApiKey is null or undefined after fetching from ScriptProperties.`);
+        } else {
+            Logger.log(`[${FUNC_NAME} DEBUG_API_KEY] Reason: Key found in ScriptProperties but failed validation. Length: ${geminiApiKey.length}, StartsWith AIza: ${geminiApiKey.startsWith("AIza")}`);
+        }
+    }
 
-  let dataSheet; // This is the "Applications" sheet
-  try {
-    dataSheet = ss.getSheetByName(APP_TRACKER_SHEET_TAB_NAME); // From Config.gs
-    if (!dataSheet) {
-        Logger.log(`[${FUNC_NAME} WARN] Core data tab "${APP_TRACKER_SHEET_TAB_NAME}" not found in "${ss.getName()}". Attempting to create and format it now...`);
-        dataSheet = ss.insertSheet(APP_TRACKER_SHEET_TAB_NAME);
-        if (!setupSheetFormatting(dataSheet, APP_TRACKER_SHEET_HEADERS, APP_SHEET_COLUMN_WIDTHS, true, SpreadsheetApp.BandingTheme.BLUE)) {
-            Logger.log(`[${FUNC_NAME} FATAL ERROR] Failed to create and format the missing "${APP_TRACKER_SHEET_TAB_NAME}" tab during processing. Aborting.`);
+    const { spreadsheet: ss } = getOrCreateSpreadsheetAndSheet();
+    if (!ss) {
+        Logger.log(`[${FUNC_NAME} FATAL ERROR] Main spreadsheet could not be accessed. Aborting.`);
+        return;
+    }
+
+    let dataSheet;
+    try {
+        dataSheet = ss.getSheetByName(APP_TRACKER_SHEET_TAB_NAME);
+        if (!dataSheet) {
+            Logger.log(`[${FUNC_NAME} WARN] Core data tab "${APP_TRACKER_SHEET_TAB_NAME}" not found in "${ss.getName()}". Attempting to create and format it now...`);
+            dataSheet = ss.insertSheet(APP_TRACKER_SHEET_TAB_NAME);
+            if (!setupSheetFormatting(dataSheet, APP_TRACKER_SHEET_HEADERS, APP_SHEET_COLUMN_WIDTHS, true, SpreadsheetApp.BandingTheme.BLUE)) {
+                Logger.log(`[${FUNC_NAME} FATAL ERROR] Failed to create and format the missing "${APP_TRACKER_SHEET_TAB_NAME}" tab during processing. Aborting.`);
+                return;
+            }
+            dataSheet.setTabColor(BRAND_COLORS.LAPIS_LAZULI);
+            Logger.log(`[${FUNC_NAME} INFO] Created and formatted missing tab: "${APP_TRACKER_SHEET_TAB_NAME}".`);
+        }
+    } catch (e) {
+        Logger.log(`[${FUNC_NAME} FATAL ERROR] Error accessing/creating core data tab "${APP_TRACKER_SHEET_TAB_NAME}": ${e.message}. Aborting.`);
+        return;
+    }
+    Logger.log(`[${FUNC_NAME} INFO] Using Spreadsheet: "${ss.getName()}", Data Tab: "${dataSheet.getName()}"`);
+
+    let procLbl, processedLblObj, manualLblObj;
+    try {
+        procLbl = GmailApp.getUserLabelByName(TRACKER_GMAIL_LABEL_TO_PROCESS);
+        processedLblObj = GmailApp.getUserLabelByName(TRACKER_GMAIL_LABEL_PROCESSED);
+        manualLblObj = GmailApp.getUserLabelByName(TRACKER_GMAIL_LABEL_MANUAL_REVIEW);
+        if (!procLbl) throw new Error(`Processing label "${TRACKER_GMAIL_LABEL_TO_PROCESS}" not found.`);
+        if (!processedLblObj) throw new Error(`Processed label "${TRACKER_GMAIL_LABEL_PROCESSED}" not found.`);
+        if (!manualLblObj) throw new Error(`Manual review label "${TRACKER_GMAIL_LABEL_MANUAL_REVIEW}" not found.`);
+        Logger.log(`[${FUNC_NAME} INFO] Core Gmail labels for tracker verified.`);
+    } catch (e) {
+        Logger.log(`[${FUNC_NAME} FATAL ERROR] Tracker labels missing or error fetching: ${e.message}. Aborting.`);
+        return;
+    }
+
+    const lastR = dataSheet.getLastRow();
+    const existingDataCache = {};
+    const processedEmailIds = new Set();
+    const dataToUpdate = [];
+    const newRows = [];
+
+    if (lastR >= 2) {
+        Logger.log(`[${FUNC_NAME} INFO] Preloading existing data from "${dataSheet.getName()}" (Rows 2 to ${lastR})...`);
+        try {
+            const range = dataSheet.getRange(2, 1, lastR - 1, dataSheet.getLastColumn());
+            const values = range.getValues();
+            for (let i = 0; i < values.length; i++) {
+                const row = values[i];
+                const emailId = row[EMAIL_ID_COL - 1];
+                if (emailId) {
+                    processedEmailIds.add(String(emailId).trim());
+                }
+                const company = row[COMPANY_COL - 1];
+                if (company) {
+                    const companyLc = String(company).toLowerCase();
+                    if (companyLc && companyLc !== MANUAL_REVIEW_NEEDED.toLowerCase() && companyLc !== 'n/a') {
+                        if (!existingDataCache[companyLc]) {
+                            existingDataCache[companyLc] = [];
+                        }
+                        existingDataCache[companyLc].push({
+                            rowNum: i + 2,
+                            rowData: row,
+                            emailId: emailId,
+                            company: company,
+                            title: row[JOB_TITLE_COL - 1],
+                            status: row[STATUS_COL - 1],
+                            peakStatus: row[PEAK_STATUS_COL - 1]
+                        });
+                    }
+                }
+            }
+            Logger.log(`[${FUNC_NAME} INFO] Preload complete. Cached ${Object.keys(existingDataCache).length} companies, ${processedEmailIds.size} processed email IDs.`);
+        } catch (e) {
+            Logger.log(`[${FUNC_NAME} FATAL ERROR] Preloading data: ${e.toString()}\nStack:${e.stack}. Aborting.`);
             return;
         }
-        dataSheet.setTabColor(BRAND_COLORS.LAPIS_LAZULI); // From Config.gs
-        Logger.log(`[${FUNC_NAME} INFO] Created and formatted missing tab: "${APP_TRACKER_SHEET_TAB_NAME}".`);
+    } else {
+        Logger.log(`[${FUNC_NAME} INFO] Applications sheet empty. No data preloaded.`);
     }
-  } catch (e) {
-    Logger.log(`[${FUNC_NAME} FATAL ERROR] Error accessing/creating core data tab "${APP_TRACKER_SHEET_TAB_NAME}": ${e.message}. Aborting.`);
-    return;
-  }
-  Logger.log(`[${FUNC_NAME} INFO] Using Spreadsheet: "${ss.getName()}", Data Tab: "${dataSheet.getName()}"`);
 
-  // --- Get Gmail Labels ---
-  let procLbl, processedLblObj, manualLblObj;
-  try {
-    procLbl = GmailApp.getUserLabelByName(TRACKER_GMAIL_LABEL_TO_PROCESS);      
-    processedLblObj = GmailApp.getUserLabelByName(TRACKER_GMAIL_LABEL_PROCESSED); 
-    manualLblObj = GmailApp.getUserLabelByName(TRACKER_GMAIL_LABEL_MANUAL_REVIEW);
-    if (!procLbl) throw new Error(`Processing label "${TRACKER_GMAIL_LABEL_TO_PROCESS}" not found.`);
-    if (!processedLblObj) throw new Error(`Processed label "${TRACKER_GMAIL_LABEL_PROCESSED}" not found.`);
-    if (!manualLblObj) throw new Error(`Manual review label "${TRACKER_GMAIL_LABEL_MANUAL_REVIEW}" not found.`);
-    Logger.log(`[${FUNC_NAME} INFO] Core Gmail labels for tracker verified.`);
-  } catch(e) {
-    Logger.log(`[${FUNC_NAME} FATAL ERROR] Tracker labels missing or error fetching: ${e.message}. Aborting.`); 
-    return;
-  }
-
-  // --- Preload Existing Data from "Applications" Sheet ---
-  const lastR = dataSheet.getLastRow(); 
-  const existingDataCache = {}; 
-  const processedEmailIds = new Set();
-  if (lastR >= 2) { 
-    Logger.log(`[${FUNC_NAME} INFO] Preloading existing data from "${dataSheet.getName()}" (Rows 2 to ${lastR})...`);
+    const THREAD_PROCESSING_LIMIT = 20;
+    let threadsToProcess = [];
     try {
-      const colsToPreloadIndices = [COMPANY_COL, JOB_TITLE_COL, EMAIL_ID_COL, STATUS_COL, PEAK_STATUS_COL]; // From Config.gs
-      const minColToRead = Math.min(...colsToPreloadIndices); const maxColToRead = Math.max(...colsToPreloadIndices);
-      const numColsToRead = maxColToRead - minColToRead + 1;
-      if (numColsToRead < 1 || minColToRead < 1) throw new Error("Invalid preload column calculation.");
-
-      const preloadValues = dataSheet.getRange(2, minColToRead, lastR - 1, numColsToRead).getValues();
-      const coIdx=COMPANY_COL-minColToRead, tiIdx=JOB_TITLE_COL-minColToRead, idIdx=EMAIL_ID_COL-minColToRead, stIdx=STATUS_COL-minColToRead, pkIdx=PEAK_STATUS_COL-minColToRead;
-
-      for (let i=0; i<preloadValues.length; i++) {
-        const rN=i+2, rD=preloadValues[i];
-        const eId=rD[idIdx]?String(rD[idIdx]).trim():"", oCo=rD[coIdx]?String(rD[coIdx]).trim():"", oTi=rD[tiIdx]?String(rD[tiIdx]).trim():"", cS=rD[stIdx]?String(rD[stIdx]).trim():"", cPkS=rD[pkIdx]?String(rD[pkIdx]).trim():"";
-        if(eId) processedEmailIds.add(eId);
-        const cL=oCo.toLowerCase(); if(cL && cL!==MANUAL_REVIEW_NEEDED.toLowerCase() && cL!=='n/a'){ if(!existingDataCache[cL])existingDataCache[cL]=[]; existingDataCache[cL].push({row:rN,emailId:eId,company:oCo,title:oTi,status:cS, peakStatus:cPkS});}
-      }
-      Logger.log(`[${FUNC_NAME} INFO] Preload complete. Cached ${Object.keys(existingDataCache).length} companies, ${processedEmailIds.size} processed email IDs.`);
-    } catch (e) { Logger.log(`[${FUNC_NAME} FATAL ERROR] Preloading data: ${e.toString()}\nStack:${e.stack}. Aborting.`); return; }
-  } else { Logger.log(`[${FUNC_NAME} INFO] Applications sheet empty. No data preloaded.`); }
-
-  // --- Fetch and Filter Emails ---
-  const THREAD_PROCESSING_LIMIT = 20; 
-  let threadsToProcess = [];
-  try { 
-    threadsToProcess = procLbl.getThreads(0, THREAD_PROCESSING_LIMIT); 
-    Logger.log(`[${FUNC_NAME} DEBUG_EMAIL_FETCH] Fetched ${threadsToProcess.length} threads from label "${procLbl.getName()}".`);
-  } catch (e) { Logger.log(`[${FUNC_NAME} ERROR] Failed gather threads: ${e.message}`); return; }
-
-  const messagesToSort = []; let skippedKnownProcessedCount = 0; let messageFetchErrorCount = 0;
-  for (const thread of threadsToProcess) {
-    const threadId = thread.getId(); try {
-      const messagesInThread = thread.getMessages();
-      for (const msg of messagesInThread) {
-        const msgId = msg.getId(); if (!processedEmailIds.has(msgId)) messagesToSort.push({ message: msg, date: msg.getDate(), threadId: threadId }); else skippedKnownProcessedCount++; 
-      }
-    } catch (e) { Logger.log(`[${FUNC_NAME} ERROR] Gather messages from thread ${threadId}: ${e.message}`); messageFetchErrorCount++; }
-  }
-  Logger.log(`[${FUNC_NAME} DEBUG_EMAIL_FETCH] Messages to sort = ${messagesToSort.length}, Skipped = ${skippedKnownProcessedCount}, Fetch errors = ${messageFetchErrorCount}.`);
-
-  if (messagesToSort.length === 0) {
-    Logger.log(`[${FUNC_NAME} INFO] No new unread/unprocessed messages found in label "${procLbl.getName()}".`);
-    try { if (typeof updateDashboardMetrics === "function") updateDashboardMetrics(ss.getSheetByName(DASHBOARD_TAB_NAME), ss.getSheetByName(HELPER_SHEET_NAME), dataSheet); } catch (e_dash) { Logger.log(`[${FUNC_NAME} WARN] Dashboard update (no new msgs) failed: ${e_dash.message}`); }
-    Logger.log(`==== ${FUNC_NAME} FINISHED (${new Date().toLocaleString()}) - No new messages. ====`);
-    return;
-  }
-  messagesToSort.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  Logger.log(`[${FUNC_NAME} INFO] Sorted ${messagesToSort.length} new messages.`);
-  
-  // --- Process Each Message (FULL LOGIC REINSTATED) ---
-  let threadProcessingOutcomes = {}; 
-  let processedThisRunCount = 0; 
-  let sheetUpdateSuccessCount = 0; 
-  let newEntryCount = 0; 
-  let processingErrorCount = 0;
-
-  for (let i = 0; i < messagesToSort.length; i++) {
-    const elapsedTime = (new Date().getTime() - SCRIPT_START_TIME.getTime()) / 1000;
-    if (elapsedTime > 320) { 
-      Logger.log(`[${FUNC_NAME} WARN] Execution time limit nearing (${elapsedTime}s). Stopping message processing loop.`); 
-      break; 
+        threadsToProcess = procLbl.getThreads(0, THREAD_PROCESSING_LIMIT);
+        Logger.log(`[${FUNC_NAME} DEBUG_EMAIL_FETCH] Fetched ${threadsToProcess.length} threads from label "${procLbl.getName()}".`);
+    } catch (e) {
+        Logger.log(`[${FUNC_NAME} ERROR] Failed gather threads: ${e.message}`);
+        return;
     }
 
-    const entry = messagesToSort[i];
-    const { message, date: emailDateObj, threadId } = entry;
-    const emailDate = new Date(emailDateObj); 
-    const msgId = message.getId();
-    const processingStartTimeMsg = new Date();
-    if(DEBUG_MODE) Logger.log(`\n--- [${FUNC_NAME}] Processing Msg ${i+1}/${messagesToSort.length} (ID: ${msgId}, Thread: ${threadId}) ---`);
-
-    let companyName = MANUAL_REVIEW_NEEDED, jobTitle = MANUAL_REVIEW_NEEDED, applicationStatus = null; 
-    let plainBodyText = null, requiresManualReview = false, sheetWriteOpSuccessThisMessage = false;
-
-    try {
-      const emailSubject = message.getSubject() || "";
-      const senderEmail = message.getFrom() || "";
-      const emailPermaLink = `https://mail.google.com/mail/u/0/#inbox/${msgId}`;
-      const currentTimestamp = new Date();
-      let detectedPlatform = DEFAULT_PLATFORM; 
-      try {
-        const emailAddressMatch = senderEmail.match(/<([^>]+)>/);
-        if (emailAddressMatch && emailAddressMatch[1]) {
-          const senderDomain = emailAddressMatch[1].split('@')[1]?.toLowerCase();
-          if (senderDomain) {
-            for (const keyword in PLATFORM_DOMAIN_KEYWORDS) {
-              if (senderDomain.includes(keyword)) { detectedPlatform = PLATFORM_DOMAIN_KEYWORDS[keyword]; break; }
+    const messagesToSort = [];
+    let skippedKnownProcessedCount = 0;
+    let messageFetchErrorCount = 0;
+    for (const thread of threadsToProcess) {
+        const threadId = thread.getId();
+        try {
+            const messagesInThread = thread.getMessages();
+            for (const msg of messagesInThread) {
+                const msgId = msg.getId();
+                if (!processedEmailIds.has(msgId)) {
+                    messagesToSort.push({ message: msg, date: msg.getDate(), threadId: threadId });
+                } else {
+                    skippedKnownProcessedCount++;
+                }
             }
-          }
+        } catch (e) {
+            Logger.log(`[${FUNC_NAME} ERROR] Gather messages from thread ${threadId}: ${e.message}`);
+            messageFetchErrorCount++;
         }
-        if(DEBUG_MODE) Logger.log(`[${FUNC_NAME} DEBUG] Detected Platform: "${detectedPlatform}"`);
-      } catch (ePlat) { Logger.log(`[${FUNC_NAME} WARN] Platform detection error: ${ePlat.message}`); }
-      
-      try { plainBodyText = message.getPlainBody(); } 
-      catch (eBody) { Logger.log(`[${FUNC_NAME} WARN] Get Plain Body Failed for Msg ${msgId}: ${eBody.message}`); plainBodyText = ""; }
-
-      if (useGemini && plainBodyText && plainBodyText.trim() !== "") {
-        const geminiResult = callGemini_forApplicationDetails(emailSubject, plainBodyText, geminiApiKey); 
-        if (geminiResult) { 
-            companyName = geminiResult.company || MANUAL_REVIEW_NEEDED; 
-            jobTitle = geminiResult.title || MANUAL_REVIEW_NEEDED; 
-            applicationStatus = geminiResult.status;
-            Logger.log(`[${FUNC_NAME} INFO] Gemini: C:"${companyName}", T:"${jobTitle}", S:"${applicationStatus}"`);
-            if (!applicationStatus || applicationStatus === MANUAL_REVIEW_NEEDED || applicationStatus === "Update/Other") {
-                const keywordStatus = parseBodyForStatus(plainBodyText); 
-                if (keywordStatus && keywordStatus !== DEFAULT_STATUS) applicationStatus = keywordStatus;
-                else if (!applicationStatus && keywordStatus === DEFAULT_STATUS) applicationStatus = DEFAULT_STATUS;
-            }
-        } else { 
-            Logger.log(`[${FUNC_NAME} WARN] Gemini call failed for Msg ${msgId}. Fallback regex.`);
-            const regexResult = extractCompanyAndTitle(message, detectedPlatform, emailSubject, plainBodyText); 
-            companyName = regexResult.company; jobTitle = regexResult.title;
-            applicationStatus = parseBodyForStatus(plainBodyText);
-        }
-      } else { 
-          const regexResult = extractCompanyAndTitle(message, detectedPlatform, emailSubject, plainBodyText);
-          companyName = regexResult.company; jobTitle = regexResult.title;
-          applicationStatus = parseBodyForStatus(plainBodyText);
-          if(DEBUG_MODE) Logger.log(`[${FUNC_NAME} DEBUG] Regex Parse: C:"${companyName}", T:"${jobTitle}", S:"${applicationStatus}"`);
-      }
-      
-      requiresManualReview = (companyName === MANUAL_REVIEW_NEEDED || jobTitle === MANUAL_REVIEW_NEEDED);
-      const finalStatusToSet = applicationStatus || DEFAULT_STATUS;
-      const companyCacheKey = (companyName !== MANUAL_REVIEW_NEEDED) ? companyName.toLowerCase() : `_manual_review_placeholder_${msgId}`;
-      let existingRowInfoToUpdate = null; let targetSheetRowForUpdate = -1;
-
-      if (companyName !== MANUAL_REVIEW_NEEDED && existingDataCache[companyCacheKey]) {
-          const potentialMatches = existingDataCache[companyCacheKey];
-          if (jobTitle !== MANUAL_REVIEW_NEEDED) existingRowInfoToUpdate = potentialMatches.find(e => e.title && e.title.toLowerCase() === jobTitle.toLowerCase());
-          if (!existingRowInfoToUpdate && potentialMatches.length > 0) existingRowInfoToUpdate = potentialMatches.reduce((latest, current) => (current.row > latest.row ? current : latest), potentialMatches[0]);
-          if (existingRowInfoToUpdate) targetSheetRowForUpdate = existingRowInfoToUpdate.row;
-      }
-
-      let rowDataForSheet = new Array(TOTAL_COLUMNS_IN_APP_SHEET).fill(""); // From Config.gs
-
-      if (targetSheetRowForUpdate !== -1 && existingRowInfoToUpdate) { 
-        const currentSheetValues = dataSheet.getRange(targetSheetRowForUpdate, 1, 1, TOTAL_COLUMNS_IN_APP_SHEET).getValues()[0];
-        rowDataForSheet = [...currentSheetValues]; 
-        rowDataForSheet[PROCESSED_TIMESTAMP_COL-1] = currentTimestamp;
-        const esDate = rowDataForSheet[EMAIL_DATE_COL-1]; if(!(esDate instanceof Date)||emailDate.getTime()>new Date(esDate).getTime())rowDataForSheet[EMAIL_DATE_COL-1]=emailDate;
-        const elDate = rowDataForSheet[LAST_UPDATE_DATE_COL-1]; if(!(elDate instanceof Date)||emailDate.getTime()>new Date(elDate).getTime())rowDataForSheet[LAST_UPDATE_DATE_COL-1]=emailDate;
-        rowDataForSheet[EMAIL_SUBJECT_COL-1]=emailSubject; rowDataForSheet[EMAIL_LINK_COL-1]=emailPermaLink; rowDataForSheet[EMAIL_ID_COL-1]=msgId; rowDataForSheet[PLATFORM_COL-1]=detectedPlatform;
-        if(companyName!==MANUAL_REVIEW_NEEDED && (rowDataForSheet[COMPANY_COL-1]===MANUAL_REVIEW_NEEDED||companyName.toLowerCase()!==String(rowDataForSheet[COMPANY_COL-1]).toLowerCase()))rowDataForSheet[COMPANY_COL-1]=companyName;
-        if(jobTitle!==MANUAL_REVIEW_NEEDED && (rowDataForSheet[JOB_TITLE_COL-1]===MANUAL_REVIEW_NEEDED||jobTitle.toLowerCase()!==String(rowDataForSheet[JOB_TITLE_COL-1]).toLowerCase()))rowDataForSheet[JOB_TITLE_COL-1]=jobTitle;
-        const statInSheet=String(rowDataForSheet[STATUS_COL-1]).trim()||DEFAULT_STATUS;
-        if(statInSheet!==ACCEPTED_STATUS||finalStatusToSet===ACCEPTED_STATUS){const curRank=STATUS_HIERARCHY[statInSheet]??0; const newRank=STATUS_HIERARCHY[finalStatusToSet]??0; if(newRank>=curRank||finalStatusToSet===REJECTED_STATUS||finalStatusToSet===OFFER_STATUS)rowDataForSheet[STATUS_COL-1]=finalStatusToSet;}
-        const statAfterUpd=String(rowDataForSheet[STATUS_COL-1]); let peakStat=existingRowInfoToUpdate.peakStatus||String(rowDataForSheet[PEAK_STATUS_COL-1]).trim(); if(!peakStat||peakStat===MANUAL_REVIEW_NEEDED||peakStat==="")peakStat=DEFAULT_STATUS;
-        const curPeakRank=STATUS_HIERARCHY[peakStat]??-2; const newStatRankPeak=STATUS_HIERARCHY[statAfterUpd]??-2; const exclPeak=new Set([REJECTED_STATUS,ACCEPTED_STATUS,MANUAL_REVIEW_NEEDED,"Update/Other"]);
-        let updPeakVal=peakStat; if(newStatRankPeak>curPeakRank&&!exclPeak.has(statAfterUpd))updPeakVal=statAfterUpd; else if(peakStat===DEFAULT_STATUS&&!exclPeak.has(statAfterUpd)&&STATUS_HIERARCHY[statAfterUpd]>STATUS_HIERARCHY[DEFAULT_STATUS])updPeakVal=statAfterUpd;
-        rowDataForSheet[PEAK_STATUS_COL-1]=updPeakVal;
-        // NOTES_COL (index 11 for col 12) remains as is from currentSheetValues if not explicitly changed.
-        dataSheet.getRange(targetSheetRowForUpdate, 1, 1, TOTAL_COLUMNS_IN_APP_SHEET).setValues([rowDataForSheet]);
-        Logger.log(`[${FUNC_NAME} INFO] SHEET WRITE: Updated Row ${targetSheetRowForUpdate}. Status:"${statAfterUpd}", Peak:"${updPeakVal}"`);
-        sheetUpdateSuccessCount++; sheetWriteOpSuccessThisMessage = true;
-        const cKey= (rowDataForSheet[COMPANY_COL-1]!==MANUAL_REVIEW_NEEDED)?String(rowDataForSheet[COMPANY_COL-1]).toLowerCase():companyCacheKey;
-        if(existingDataCache[cKey])existingDataCache[cKey]=existingDataCache[cKey].map(e=>e.row===targetSheetRowForUpdate?{...e,status:statAfterUpd,peakStatus:updPeakVal,emailId:msgId,title:rowDataForSheet[JOB_TITLE_COL-1]}:e);
-      } else { 
-        rowDataForSheet[PROCESSED_TIMESTAMP_COL-1]=currentTimestamp; rowDataForSheet[EMAIL_DATE_COL-1]=emailDate; rowDataForSheet[PLATFORM_COL-1]=detectedPlatform; rowDataForSheet[COMPANY_COL-1]=companyName; rowDataForSheet[JOB_TITLE_COL-1]=jobTitle; rowDataForSheet[STATUS_COL-1]=finalStatusToSet; rowDataForSheet[LAST_UPDATE_DATE_COL-1]=emailDate; rowDataForSheet[EMAIL_SUBJECT_COL-1]=emailSubject; rowDataForSheet[EMAIL_LINK_COL-1]=emailPermaLink; rowDataForSheet[EMAIL_ID_COL-1]=msgId;
-        // NOTES_COL (index 11 for col 12) will be "" by default.
-        const exclPeakInit=new Set([REJECTED_STATUS,ACCEPTED_STATUS,MANUAL_REVIEW_NEEDED,"Update/Other"]);
-        if(!exclPeakInit.has(finalStatusToSet))rowDataForSheet[PEAK_STATUS_COL-1]=finalStatusToSet; else rowDataForSheet[PEAK_STATUS_COL-1]=DEFAULT_STATUS;
-        dataSheet.appendRow(rowDataForSheet);
-        const newSRN=dataSheet.getLastRow();
-        Logger.log(`[${FUNC_NAME} INFO] SHEET WRITE: Appended Row ${newSRN}. Status:"${finalStatusToSet}", Peak:"${rowDataForSheet[PEAK_STATUS_COL - 1]}"`);
-        newEntryCount++; sheetWriteOpSuccessThisMessage = true;
-        const nKey=(rowDataForSheet[COMPANY_COL-1]!==MANUAL_REVIEW_NEEDED)?String(rowDataForSheet[COMPANY_COL-1]).toLowerCase():companyCacheKey;
-        if(!existingDataCache[nKey])existingDataCache[nKey]=[]; existingDataCache[nKey].push({row:newSRN,emailId:msgId,company:rowDataForSheet[COMPANY_COL-1],title:rowDataForSheet[JOB_TITLE_COL-1],status:rowDataForSheet[STATUS_COL-1],peakStatus:rowDataForSheet[PEAK_STATUS_COL-1]});
-      }
-
-      if (sheetWriteOpSuccessThisMessage) {
-        processedThisRunCount++; processedEmailIds.add(msgId);
-        let msgOutcome=(requiresManualReview||companyName===MANUAL_REVIEW_NEEDED||jobTitle===MANUAL_REVIEW_NEEDED)?'manual':'done';
-        if(threadProcessingOutcomes[threadId]!=='manual')threadProcessingOutcomes[threadId]=msgOutcome;
-        if(msgOutcome==='manual')threadProcessingOutcomes[threadId]='manual';
-      } else { processingErrorCount++; threadProcessingOutcomes[threadId]='manual'; Logger.log(`[${FUNC_NAME} ERROR] Sheet Write Fail Msg ${msgId}. Thread ${threadId} marked manual.`);}
-    } catch (eMsgProc) {
-      Logger.log(`[${FUNC_NAME} FATAL ERROR] Proc Msg ${msgId}(Thr ${threadId}): ${eMsgProc.message}\nStack:${eMsgProc.stack}`);
-      threadProcessingOutcomes[threadId]='manual'; processingErrorCount++;
     }
-    if(DEBUG_MODE){ const msgProcTime=(new Date().getTime()-processingStartTimeMsg.getTime())/1000; Logger.log(`--- [${FUNC_NAME}] End Msg ${i+1}/${messagesToSort.length} --- Time:${msgProcTime}s ---`);} 
-    Utilities.sleep(200 + Math.floor(Math.random() * 100)); 
-  }
+    Logger.log(`[${FUNC_NAME} DEBUG_EMAIL_FETCH] Messages to sort = ${messagesToSort.length}, Skipped = ${skippedKnownProcessedCount}, Fetch errors = ${messageFetchErrorCount}.`);
 
-  // --- Apply Final Labels ---
-  Logger.log(`\n[${FUNC_NAME} INFO] Loop done. Processed:${processedThisRunCount}, Updates:${sheetUpdateSuccessCount}, New:${newEntryCount}, Errors:${processingErrorCount}.`);
-  if(Object.keys(threadProcessingOutcomes).length > 0) {
-      if (DEBUG_MODE) Logger.log(`[${FUNC_NAME} DEBUG] Final Thread Outcomes: ${JSON.stringify(threadProcessingOutcomes)}`);
-      applyFinalLabels(threadProcessingOutcomes, procLbl, processedLblObj, manualLblObj);
-  } else { Logger.log(`[${FUNC_NAME} INFO] No threads to re-label.`); }
-  
-  // --- Update Dashboard ---
-  try {
-    Logger.log(`[${FUNC_NAME} INFO] Final dashboard update...`);
-    if (typeof updateDashboardMetrics === "function") updateDashboardMetrics(ss.getSheetByName(DASHBOARD_TAB_NAME), ss.getSheetByName(HELPER_SHEET_NAME), dataSheet);
-  } catch (e_dash_final) { Logger.log(`[${FUNC_NAME} ERROR] Final dashboard update: ${e_dash_final.message}`); }
+    if (messagesToSort.length === 0) {
+        Logger.log(`[${FUNC_NAME} INFO] No new unread/unprocessed messages found in label "${procLbl.getName()}".`);
+        Logger.log(`==== ${FUNC_NAME} FINISHED (${new Date().toLocaleString()}) - No new messages. ====`);
+        return;
+    }
+    messagesToSort.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    Logger.log(`[${FUNC_NAME} INFO] Sorted ${messagesToSort.length} new messages.`);
 
-  const SCRIPT_END_TIME_FINAL = new Date(); // Renamed to avoid conflict
-  Logger.log(`\n==== ${FUNC_NAME} FINISHED (${SCRIPT_END_TIME_FINAL.toLocaleString()}) === Total Time: ${(SCRIPT_END_TIME_FINAL.getTime() - SCRIPT_START_TIME.getTime())/1000}s ====`);
+    let threadProcessingOutcomes = {};
+    let processedThisRunCount = 0;
+    let sheetUpdateSuccessCount = 0;
+    let newEntryCount = 0;
+    let processingErrorCount = 0;
+
+    for (let i = 0; i < messagesToSort.length; i++) {
+        const elapsedTime = (new Date().getTime() - SCRIPT_START_TIME.getTime()) / 1000;
+        if (elapsedTime > 320) {
+            Logger.log(`[${FUNC_NAME} WARN] Execution time limit nearing (${elapsedTime}s). Stopping message processing loop.`);
+            break;
+        }
+
+        const entry = messagesToSort[i];
+        const { message, date: emailDateObj, threadId } = entry;
+        const emailDate = new Date(emailDateObj);
+        const msgId = message.getId();
+        const processingStartTimeMsg = new Date();
+        if (DEBUG_MODE) Logger.log(`\n--- [${FUNC_NAME}] Processing Msg ${i + 1}/${messagesToSort.length} (ID: ${msgId}, Thread: ${threadId}) ---`);
+
+        let companyName = MANUAL_REVIEW_NEEDED, jobTitle = MANUAL_REVIEW_NEEDED, applicationStatus = null;
+        let plainBodyText = null, requiresManualReview = false, sheetWriteOpSuccessThisMessage = false;
+
+        try {
+            const emailSubject = message.getSubject() || "";
+            const senderEmail = message.getFrom() || "";
+            const emailPermaLink = `https://mail.google.com/mail/u/0/#inbox/${msgId}`;
+            const currentTimestamp = new Date();
+            let detectedPlatform = DEFAULT_PLATFORM;
+            try {
+                const emailAddressMatch = senderEmail.match(/<([^>]+)>/);
+                if (emailAddressMatch && emailAddressMatch[1]) {
+                    const senderDomain = emailAddressMatch[1].split('@')[1]?.toLowerCase();
+                    if (senderDomain) {
+                        for (const keyword in PLATFORM_DOMAIN_KEYWORDS) {
+                            if (senderDomain.includes(keyword)) {
+                                detectedPlatform = PLATFORM_DOMAIN_KEYWORDS[keyword];
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (DEBUG_MODE) Logger.log(`[${FUNC_NAME} DEBUG] Detected Platform: "${detectedPlatform}"`);
+            } catch (ePlat) {
+                Logger.log(`[${FUNC_NAME} WARN] Platform detection error: ${ePlat.message}`);
+            }
+
+            try {
+                plainBodyText = message.getPlainBody();
+            } catch (eBody) {
+                Logger.log(`[${FUNC_NAME} WARN] Get Plain Body Failed for Msg ${msgId}: ${eBody.message}`);
+                plainBodyText = "";
+            }
+
+            if (useGemini && plainBodyText && plainBodyText.trim() !== "") {
+                const geminiResult = callGemini_forApplicationDetails(emailSubject, plainBodyText, geminiApiKey);
+                if (geminiResult) {
+                    companyName = geminiResult.company || MANUAL_REVIEW_NEEDED;
+                    jobTitle = geminiResult.title || MANUAL_REVIEW_NEEDED;
+                    applicationStatus = geminiResult.status;
+                    Logger.log(`[${FUNC_NAME} INFO] Gemini: C:"${companyName}", T:"${jobTitle}", S:"${applicationStatus}"`);
+                    if (!applicationStatus || applicationStatus === MANUAL_REVIEW_NEEDED || applicationStatus === "Update/Other") {
+                        const keywordStatus = parseBodyForStatus(plainBodyText);
+                        if (keywordStatus && keywordStatus !== DEFAULT_STATUS) applicationStatus = keywordStatus;
+                        else if (!applicationStatus && keywordStatus === DEFAULT_STATUS) applicationStatus = DEFAULT_STATUS;
+                    }
+                } else {
+                    Logger.log(`[${FUNC_NAME} WARN] Gemini call failed for Msg ${msgId}. Fallback regex.`);
+                    const regexResult = extractCompanyAndTitle(message, detectedPlatform, emailSubject, plainBodyText);
+                    companyName = regexResult.company;
+                    jobTitle = regexResult.title;
+                    applicationStatus = parseBodyForStatus(plainBodyText);
+                }
+            } else {
+                const regexResult = extractCompanyAndTitle(message, detectedPlatform, emailSubject, plainBodyText);
+                companyName = regexResult.company;
+                jobTitle = regexResult.title;
+                applicationStatus = parseBodyForStatus(plainBodyText);
+                if (DEBUG_MODE) Logger.log(`[${FUNC_NAME} DEBUG] Regex Parse: C:"${companyName}", T:"${jobTitle}", S:"${applicationStatus}"`);
+            }
+
+            requiresManualReview = (companyName === MANUAL_REVIEW_NEEDED || jobTitle === MANUAL_REVIEW_NEEDED);
+            const finalStatusToSet = applicationStatus || DEFAULT_STATUS;
+            const companyCacheKey = (companyName !== MANUAL_REVIEW_NEEDED) ? companyName.toLowerCase() : `_manual_review_placeholder_${msgId}`;
+            let existingRowInfoToUpdate = null;
+            let targetSheetRowForUpdate = -1;
+
+            if (companyName !== MANUAL_REVIEW_NEEDED && existingDataCache[companyCacheKey]) {
+                const potentialMatches = existingDataCache[companyCacheKey];
+                if (jobTitle !== MANUAL_REVIEW_NEEDED) {
+                    existingRowInfoToUpdate = potentialMatches.find(e => e.title && e.title.toLowerCase() === jobTitle.toLowerCase());
+                }
+                if (!existingRowInfoToUpdate && potentialMatches.length > 0) {
+                    existingRowInfoToUpdate = potentialMatches.reduce((latest, current) => (current.rowNum > latest.rowNum ? current : latest), potentialMatches[0]);
+                }
+                if (existingRowInfoToUpdate) {
+                    targetSheetRowForUpdate = existingRowInfoToUpdate.rowNum;
+                }
+            }
+
+            if (targetSheetRowForUpdate !== -1 && existingRowInfoToUpdate) {
+                const rowDataForSheet = existingRowInfoToUpdate.rowData;
+                rowDataForSheet[PROCESSED_TIMESTAMP_COL - 1] = currentTimestamp;
+                const esDate = rowDataForSheet[EMAIL_DATE_COL - 1];
+                if (!(esDate instanceof Date) || emailDate.getTime() > new Date(esDate).getTime()) {
+                    rowDataForSheet[EMAIL_DATE_COL - 1] = emailDate;
+                }
+                const elDate = rowDataForSheet[LAST_UPDATE_DATE_COL - 1];
+                if (!(elDate instanceof Date) || emailDate.getTime() > new Date(elDate).getTime()) {
+                    rowDataForSheet[LAST_UPDATE_DATE_COL - 1] = emailDate;
+                }
+                rowDataForSheet[EMAIL_SUBJECT_COL - 1] = emailSubject;
+                rowDataForSheet[EMAIL_LINK_COL - 1] = emailPermaLink;
+                rowDataForSheet[EMAIL_ID_COL - 1] = msgId;
+                rowDataForSheet[PLATFORM_COL - 1] = detectedPlatform;
+
+                if (companyName !== MANUAL_REVIEW_NEEDED && (rowDataForSheet[COMPANY_COL - 1] === MANUAL_REVIEW_NEEDED || companyName.toLowerCase() !== String(rowDataForSheet[COMPANY_COL - 1]).toLowerCase())) {
+                    rowDataForSheet[COMPANY_COL - 1] = companyName;
+                }
+                if (jobTitle !== MANUAL_REVIEW_NEEDED && (rowDataForSheet[JOB_TITLE_COL - 1] === MANUAL_REVIEW_NEEDED || jobTitle.toLowerCase() !== String(rowDataForSheet[JOB_TITLE_COL - 1]).toLowerCase())) {
+                    rowDataForSheet[JOB_TITLE_COL - 1] = jobTitle;
+                }
+
+                const statInSheet = String(rowDataForSheet[STATUS_COL - 1]).trim() || DEFAULT_STATUS;
+                if (statInSheet !== ACCEPTED_STATUS || finalStatusToSet === ACCEPTED_STATUS) {
+                    const curRank = STATUS_HIERARCHY[statInSheet] ?? 0;
+                    const newRank = STATUS_HIERARCHY[finalStatusToSet] ?? 0;
+                    if (newRank >= curRank || finalStatusToSet === REJECTED_STATUS || finalStatusToSet === OFFER_STATUS) {
+                        rowDataForSheet[STATUS_COL - 1] = finalStatusToSet;
+                    }
+                }
+
+                const statAfterUpd = String(rowDataForSheet[STATUS_COL - 1]);
+                let peakStat = existingRowInfoToUpdate.peakStatus || String(rowDataForSheet[PEAK_STATUS_COL - 1]).trim();
+                if (!peakStat || peakStat === MANUAL_REVIEW_NEEDED || peakStat === "") {
+                    peakStat = DEFAULT_STATUS;
+                }
+
+                const curPeakRank = STATUS_HIERARCHY[peakStat] ?? -2;
+                const newStatRankPeak = STATUS_HIERARCHY[statAfterUpd] ?? -2;
+                const exclPeak = new Set([REJECTED_STATUS, ACCEPTED_STATUS, MANUAL_REVIEW_NEEDED, "Update/Other"]);
+                let updPeakVal = peakStat;
+                if (newStatRankPeak > curPeakRank && !exclPeak.has(statAfterUpd)) {
+                    updPeakVal = statAfterUpd;
+                } else if (peakStat === DEFAULT_STATUS && !exclPeak.has(statAfterUpd) && STATUS_HIERARCHY[statAfterUpd] > STATUS_HIERARCHY[DEFAULT_STATUS]) {
+                    updPeakVal = statAfterUpd;
+                }
+                rowDataForSheet[PEAK_STATUS_COL - 1] = updPeakVal;
+                dataToUpdate.push({ row: targetSheetRowForUpdate, values: rowDataForSheet });
+                Logger.log(`[${FUNC_NAME} INFO] SHEET PREPARED FOR UPDATE: Row ${targetSheetRowForUpdate}. Status:"${statAfterUpd}", Peak:"${updPeakVal}"`);
+                sheetUpdateSuccessCount++;
+                sheetWriteOpSuccessThisMessage = true;
+            } else {
+                const rowDataForSheet = new Array(TOTAL_COLUMNS_IN_APP_SHEET).fill("");
+                rowDataForSheet[PROCESSED_TIMESTAMP_COL - 1] = currentTimestamp;
+                rowDataForSheet[EMAIL_DATE_COL - 1] = emailDate;
+                rowDataForSheet[PLATFORM_COL - 1] = detectedPlatform;
+                rowDataForSheet[COMPANY_COL - 1] = companyName;
+                rowDataForSheet[JOB_TITLE_COL - 1] = jobTitle;
+                rowDataForSheet[STATUS_COL - 1] = finalStatusToSet;
+                rowDataForSheet[LAST_UPDATE_DATE_COL - 1] = emailDate;
+                rowDataForSheet[EMAIL_SUBJECT_COL - 1] = emailSubject;
+                rowDataForSheet[EMAIL_LINK_COL - 1] = emailPermaLink;
+                rowDataForSheet[EMAIL_ID_COL - 1] = msgId;
+                const exclPeakInit = new Set([REJECTED_STATUS, ACCEPTED_STATUS, MANUAL_REVIEW_NEEDED, "Update/Other"]);
+                if (!exclPeakInit.has(finalStatusToSet)) {
+                    rowDataForSheet[PEAK_STATUS_COL - 1] = finalStatusToSet;
+                } else {
+                    rowDataForSheet[PEAK_STATUS_COL - 1] = DEFAULT_STATUS;
+                }
+                newRows.push(rowDataForSheet);
+                Logger.log(`[${FUNC_NAME} INFO] NEW ROW PREPARED FOR APPEND. Status:"${finalStatusToSet}", Peak:"${rowDataForSheet[PEAK_STATUS_COL - 1]}"`);
+                newEntryCount++;
+                sheetWriteOpSuccessThisMessage = true;
+            }
+
+            if (sheetWriteOpSuccessThisMessage) {
+                processedThisRunCount++;
+                processedEmailIds.add(msgId);
+                let msgOutcome = (requiresManualReview || companyName === MANUAL_REVIEW_NEEDED || jobTitle === MANUAL_REVIEW_NEEDED) ? 'manual' : 'done';
+                if (threadProcessingOutcomes[threadId] !== 'manual') {
+                    threadProcessingOutcomes[threadId] = msgOutcome;
+                }
+                if (msgOutcome === 'manual') {
+                    threadProcessingOutcomes[threadId] = 'manual';
+                }
+            } else {
+                processingErrorCount++;
+                threadProcessingOutcomes[threadId] = 'manual';
+                Logger.log(`[${FUNC_NAME} ERROR] Sheet Write Fail Msg ${msgId}. Thread ${threadId} marked manual.`);
+            }
+        } catch (eMsgProc) {
+            Logger.log(`[${FUNC_NAME} FATAL ERROR] Proc Msg ${msgId}(Thr ${threadId}): ${eMsgProc.message}\nStack:${eMsgProc.stack}`);
+            threadProcessingOutcomes[threadId] = 'manual';
+            processingErrorCount++;
+        }
+        if (DEBUG_MODE) {
+            const msgProcTime = (new Date().getTime() - processingStartTimeMsg.getTime()) / 1000;
+            Logger.log(`--- [${FUNC_NAME}] End Msg ${i + 1}/${messagesToSort.length} --- Time:${msgProcTime}s ---`);
+        }
+        Utilities.sleep(200 + Math.floor(Math.random() * 100));
+    }
+
+    if (dataToUpdate.length > 0) {
+        dataToUpdate.forEach(update => {
+            dataSheet.getRange(update.row, 1, 1, update.values.length).setValues([update.values]);
+        });
+        Logger.log(`[${FUNC_NAME} INFO] Batch updated ${dataToUpdate.length} rows.`);
+    }
+
+    if (newRows.length > 0) {
+        dataSheet.getRange(dataSheet.getLastRow() + 1, 1, newRows.length, newRows[0].length).setValues(newRows);
+        Logger.log(`[${FUNC_NAME} INFO] Batch appended ${newRows.length} new rows.`);
+    }
+
+    Logger.log(`\n[${FUNC_NAME} INFO] Loop done. Processed:${processedThisRunCount}, Updates:${sheetUpdateSuccessCount}, New:${newEntryCount}, Errors:${processingErrorCount}.`);
+    if (Object.keys(threadProcessingOutcomes).length > 0) {
+        if (DEBUG_MODE) Logger.log(`[${FUNC_NAME} DEBUG] Final Thread Outcomes: ${JSON.stringify(threadProcessingOutcomes)}`);
+        applyFinalLabels(threadProcessingOutcomes, procLbl, processedLblObj, manualLblObj);
+    } else {
+        Logger.log(`[${FUNC_NAME} INFO] No threads to re-label.`);
+    }
+
+    const SCRIPT_END_TIME_FINAL = new Date();
+    Logger.log(`\n==== ${FUNC_NAME} FINISHED (${SCRIPT_END_TIME_FINAL.toLocaleString()}) === Total Time: ${(SCRIPT_END_TIME_FINAL.getTime() - SCRIPT_START_TIME.getTime()) / 1000}s ====`);
 }
 
 

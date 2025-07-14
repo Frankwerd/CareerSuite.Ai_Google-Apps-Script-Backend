@@ -180,9 +180,6 @@ Output JSON:
             Logger.log(`[ERROR] GEMINI_PARSE_APP: Error parsing JSON: ${e.toString()}\nString: >>>${extractedJsonString}<<<`);
             return {company:MANUAL_REVIEW_NEEDED, title:MANUAL_REVIEW_NEEDED, status:MANUAL_REVIEW_NEEDED};
           }
-        } else if (jsonResponse.promptFeedback?.blockReason) {
-          Logger.log(`[ERROR] GEMINI_PARSE_APP: Prompt blocked. Reason: ${jsonResponse.promptFeedback.blockReason}. Details: ${JSON.stringify(jsonResponse.promptFeedback.safetyRatings)}`);
-          return {company:MANUAL_REVIEW_NEEDED, title:MANUAL_REVIEW_NEEDED, status:`Blocked: ${jsonResponse.promptFeedback.blockReason}`};
         } else {
           Logger.log(`[ERROR] GEMINI_PARSE_APP: API response structure unexpected. Body (start): ${responseBody.substring(0,500)}`);
           return null; 

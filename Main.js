@@ -969,6 +969,7 @@ function userDrivenFullSetup() {
       }
       
       // New prompt to guide user back to tutorial (shown regardless of AI status, as basic setup is done)
+      ui.alert('How to Uninstall', 'If you ever want to remove the backend automation, you can do so by going to the "' + menuName + '" menu and selecting "❌ Uninstall Backend".', ui.ButtonSet.OK);
       ui.alert('Next Steps', 'You can return to the tutorial page for guidance on using your new CareerSuite.AI sheet, or start exploring it right away.', ui.ButtonSet.OK);
 
     } else {

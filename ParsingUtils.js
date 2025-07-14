@@ -1,8 +1,14 @@
-// File: ParsingUtils.gs
-// Description: Contains functions dedicated to parsing email content (subject, body, sender)
-// using regular expressions and keyword matching to extract job application details.
+/**
+ * @file Contains functions dedicated to parsing email content (subject, body, sender)
+ * using regular expressions and keyword matching to extract job application details.
+ */
 
-// --- REGEX PARSING LOGIC (FALLBACK) ---
+/**
+ * Parses the company name from the sender's email domain.
+ * It cleans the domain by removing common prefixes and TLDs.
+ * @param {string} sender The sender's email address (e.g., "Company <careers@company.com>").
+ * @returns {string|null} The parsed company name or null if not found.
+ */
 function parseCompanyFromDomain(sender) {
   const emailMatch = sender.match(/<([^>]+)>/); if (!emailMatch || !emailMatch[1]) return null;
   const emailAddress = emailMatch[1]; const domainParts = emailAddress.split('@'); if (domainParts.length !== 2) return null;
@@ -15,6 +21,12 @@ function parseCompanyFromDomain(sender) {
   return domain.trim() || null;
 }
 
+/**
+ * Parses the company name from the sender's display name.
+ * It removes common noise like "Careers at" or "via Greenhouse".
+ * @param {string} sender The sender's email address (e.g., "Company <careers@company.com>").
+ * @returns {string|null} The parsed company name or null if not found.
+ */
 function parseCompanyFromSenderName(sender) {
   const nameMatch = sender.match(/^"?(.*?)"?\s*</);
   let name = nameMatch ? nameMatch[1].trim() : sender.split('<')[0].trim();
@@ -35,6 +47,16 @@ function parseCompanyFromSenderName(sender) {
   return null;
 }
 
+/**
+ * Extracts the company name and job title from an email message.
+ * It uses a combination of platform-specific logic, regex patterns on the subject line,
+ * and fallback parsing of the email body.
+ * @param {GoogleAppsScript.Gmail.GmailMessage} message The Gmail message object.
+ * @param {string} platform The platform the email originated from (e.g., "Wellfound", "Lever").
+ * @param {string} emailSubject The subject of the email.
+ * @param {string} plainBody The plain text body of the email.
+ * @returns {{company: string, title: string}} An object containing the extracted company and title.
+ */
 function extractCompanyAndTitle(message, platform, emailSubject, plainBody) {
   let company = MANUAL_REVIEW_NEEDED; // From Config.gs
   let title = MANUAL_REVIEW_NEEDED;   // From Config.gs
@@ -136,6 +158,12 @@ function extractCompanyAndTitle(message, platform, emailSubject, plainBody) {
   return {company: company, title: title};
 }
 
+/**
+ * Parses the email body for keywords to determine the application status.
+ * It uses predefined keyword lists from `Config.js` to check for different statuses.
+ * @param {string} plainBody The plain text body of the email.
+ * @returns {string|null} The determined application status or null if no keywords are matched.
+ */
 function parseBodyForStatus(plainBody) {
   if (!plainBody || plainBody.length < 10) { if (DEBUG_MODE) Logger.log("[DEBUG] RGX_STATUS: Body too short/missing for status parse."); return null; }
   let bL = plainBody.toLowerCase().replace(/[.,!?;:()\[\]{}'"“”‘’\-–—]/g, ' ').replace(/\s+/g, ' ').trim(); // Normalize

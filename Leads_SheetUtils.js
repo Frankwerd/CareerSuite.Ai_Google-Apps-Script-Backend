@@ -1,9 +1,14 @@
-// File: Leads_SheetUtils.gs
-// Handles GET and POST requests for the CareerSuite.AI Web App.
+/**
+ * @file Handles GET and POST requests for the CareerSuite.AI Web App.
+ * This includes creating the user's spreadsheet and providing data to the web app.
+ */
 
-// NOTE: The hardcoded template ID has been removed from this file.
-// The script now correctly uses the global TEMPLATE_SHEET_ID constant from Config.gs.
-
+/**
+ * Handles GET requests to the web app. This is the entry point for the web app.
+ * It serves a simple HTML page to confirm successful authorization.
+ * @param {GoogleAppsScript.Events.DoGet} e The event parameter for a GET request.
+ * @returns {GoogleAppsScript.HTML.HtmlOutput} The HTML output to be rendered.
+ */
 function doGet(e) {
   try {
     // This log helps confirm the function is triggered.
@@ -58,7 +63,11 @@ function doGet(e) {
 }
 
 /**
- * Handles POST requests, primarily for initializing the user's sheet.
+ * Handles POST requests to the web app.
+ * The primary use case is to create a new spreadsheet for the user from the template.
+ * It returns a JSON response indicating success or failure.
+ * @param {GoogleAppsScript.Events.DoPost} e The event parameter for a POST request.
+ * @returns {GoogleAppsScript.Content.TextOutput} A JSON response.
  */
 function doPost(e) {
   try {
@@ -135,7 +144,10 @@ function doPost(e) {
 
 /**
  * Handles GET requests for dashboard data.
- * Called via ?action=getDashboardData
+ * This function is called via a GET request with the query parameter `?action=getDashboardData`.
+ * It retrieves key metrics from the user's spreadsheet and returns them as a JSON object.
+ * @param {GoogleAppsScript.Events.DoGet} e The event parameter for a GET request.
+ * @returns {GoogleAppsScript.Content.TextOutput} A JSON response containing the dashboard data.
  */
 function doGet_DashboardData(e) {
   try {
@@ -204,7 +216,11 @@ function doGet_DashboardData(e) {
   }
 }
 
-// Simple XML Escaper for HTML Service output
+/**
+ * A simple XML escaper for use with HTML Service output.
+ * @param {string} text The text to escape.
+ * @returns {string} The escaped text.
+ */
 function escapeXmlSimple(text) {
     if (text === null || typeof text === 'undefined') return '';
     return String(text)
@@ -216,7 +232,10 @@ function escapeXmlSimple(text) {
     }
 
 
-// For testing template access directly from Apps Script editor
+/**
+ * A utility function for testing template access directly from the Apps Script editor.
+ * It attempts to find and copy the template spreadsheet.
+ */
 function manualTestTemplateAccess() {
   const id = TEMPLATE_SHEET_ID; // Uses the global constant from Config.js
   if (!id || id === "YOUR_MASTER_TEMPLATE_SHEET_ID_GOES_HERE") {
@@ -240,8 +259,11 @@ function manualTestTemplateAccess() {
 
 /**
  * Handles GET requests for aggregated weekly application data.
- * Called via ?action=getWeeklyApplicationData
- * Reads from DashboardHelperData sheet, columns D (Week Starting) and E (Applications).
+ * This function is called via a GET request with the query parameter `?action=getWeeklyApplicationData`.
+ * It reads data from the 'DashboardHelperData' sheet, specifically columns D (Week Starting) and E (Applications),
+ * and returns the last 8 weeks of data as a JSON object.
+ * @param {GoogleAppsScript.Events.DoGet} e The event parameter for a GET request.
+ * @returns {GoogleAppsScript.Content.TextOutput} A JSON response containing the weekly application data.
  */
 function doGet_WeeklyApplicationData(e) {
   const FUNC_NAME = "doGet_WeeklyApplicationData";

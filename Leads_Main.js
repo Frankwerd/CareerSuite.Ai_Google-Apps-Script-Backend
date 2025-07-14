@@ -1,15 +1,16 @@
-// File: Leads_Main.gs
-// Description: Contains the primary functions for the Job Leads Tracker module,
-// including initial setup of the leads sheet/labels/filters and the
-// ongoing processing of job lead emails.
+/**
+ * @file Contains the primary functions for the Job Leads Tracker module,
+ * including initial setup of the leads sheet/labels/filters and the
+ * ongoing processing of job lead emails.
+ */
 
 /**
- * Sets up the Job Leads Tracker module:
- * - Ensures the "Potential Job Leads" sheet exists and formats it using SheetUtils.
- * - Creates necessary Gmail labels and filter.
- * - Sets up a daily trigger for processing new job leads.
+ * Sets up the Job Leads Tracker module.
+ * This function ensures the "Potential Job Leads" sheet exists and is formatted,
+ * creates the necessary Gmail labels and filter, and sets up a daily trigger
+ * for processing new job leads.
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} passedSpreadsheet The spreadsheet object to set up.
- * @return {{success: boolean, messages: Array<string>}} Result of the setup.
+ * @returns {{success: boolean, messages: string[]}} An object containing the setup result and messages.
  */
 function runInitialSetup_JobLeadsModule(passedSpreadsheet) {
   const FUNC_NAME = "runInitialSetup_JobLeadsModule";
@@ -134,7 +135,9 @@ function runInitialSetup_JobLeadsModule(passedSpreadsheet) {
 }
 
 /**
- * Processes emails labeled for job leads.
+ * Processes emails that have been labeled for job lead extraction.
+ * This function is designed to be run on a time-driven trigger. It fetches emails,
+ * calls the Gemini API to extract job leads, and writes the results to the spreadsheet.
  */
 function processJobLeads() {
     const FUNC_NAME = "processJobLeads";

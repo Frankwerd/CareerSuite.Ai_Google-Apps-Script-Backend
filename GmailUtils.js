@@ -1,7 +1,12 @@
-// File: GmailUtils.gs
-// Description: Contains functions for interacting with Gmail, primarily label creation and management.
+/**
+ * @file Contains functions for interacting with Gmail, primarily label creation and management.
+ */
 
-// --- Helper: Get or Create Gmail Label ---
+/**
+ * Retrieves a Gmail label by name, creating it if it doesn't exist.
+ * @param {string} labelName The name of the Gmail label to get or create.
+ * @returns {GoogleAppsScript.Gmail.GmailLabel|null} The GmailLabel object or null if an error occurs.
+ */
 function getOrCreateLabel(labelName) {
   if (!labelName || typeof labelName !== 'string' || labelName.trim() === "") {
     Logger.log(`[GMAIL_UTIL ERROR] Invalid labelName provided to getOrCreateLabel: "${labelName}"`);
@@ -37,7 +42,14 @@ function getOrCreateLabel(labelName) {
   return label;
 }
 
-// --- Helper: Apply Labels After Processing ---
+/**
+ * Applies final labels to Gmail threads based on their processing outcome.
+ * It removes the "processing" label and adds either a "processed" or "manual review" label.
+ * @param {Object.<string, string>} threadOutcomes - An object mapping thread IDs to their outcome ('done' or 'manual').
+ * @param {GoogleAppsScript.Gmail.GmailLabel} processingLabel - The label indicating threads are being processed.
+ * @param {GoogleAppsScript.Gmail.GmailLabel} processedLabelObj - The label for successfully processed threads.
+ * @param {GoogleAppsScript.Gmail.GmailLabel} manualReviewLabelObj - The label for threads requiring manual review.
+ */
 function applyFinalLabels(threadOutcomes, processingLabel, processedLabelObj, manualReviewLabelObj) {
   const threadIdsToUpdate = Object.keys(threadOutcomes);
   if (threadIdsToUpdate.length === 0) {

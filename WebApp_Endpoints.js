@@ -1,12 +1,13 @@
-// File: WebApp_Endpoints.gs
-// Description: Handles authenticated GET requests for the CareerSuite.AI Web App.
-// Version: 2.1 (OAuth2 Integrated, Final)
+/**
+ * @file Handles authenticated GET and POST requests for the CareerSuite.AI Web App.
+ * @version 2.1
+ */
 
 /**
  * Main entry point for all GET requests to the Web App.
- * Routes requests based on an 'action' parameter after validating authentication.
- * @param {object} e The event parameter from the GET request.
- * @return {GoogleAppsScript.Content.TextOutput | GoogleAppsScript.HTML.HtmlOutput} A JSON or HTML response.
+ * It routes requests based on an 'action' parameter after validating authentication.
+ * @param {GoogleAppsScript.Events.DoGet} e The event parameter from the GET request.
+ * @returns {GoogleAppsScript.Content.TextOutput | GoogleAppsScript.HTML.HtmlOutput} A JSON or HTML response.
  */
 function doGet(e) {
   const FUNC_NAME = "WebApp_doGet";
@@ -44,9 +45,14 @@ function doGet(e) {
 }
 
 /**
- * NEW/CORRECTED: Handles POST requests, which should ONLY be for saving data like the API key.
- * @param {object} e The event parameter from the POST request.
- * @return {GoogleAppsScript.Content.TextOutput} A JSON response.
+ * Handles POST requests to the web app, primarily for saving data like the API key.
+ * @param {GoogleAppsScript.Events.DoPost} e The event parameter from the POST request.
+ * @returns {GoogleAppsScript.Content.TextOutput} A JSON response.
+ */
+/**
+ * Handles POST requests to the web app.
+ * @param {GoogleAppsScript.Events.DoPost} e The event parameter from the POST request.
+ * @returns {GoogleAppsScript.Content.TextOutput} A JSON response.
  */
 function doPost(e) {
   const FUNC_NAME = "WebApp_doPost";
@@ -84,10 +90,10 @@ function doPost(e) {
 
 
 /**
- * NEW: Handles the logic for getting an existing sheet or creating a new one.
+ * Handles the logic for getting an existing sheet or creating a new one.
  * This is the primary endpoint for the extension's "Access My Job Tracker" button.
- * @param {object} e The event parameter from the GET request.
- * @return {GoogleAppsScript.Content.TextOutput} A JSON response.
+ * @param {GoogleAppsScript.Events.DoGet} e The event parameter from the GET request.
+ * @returns {GoogleAppsScript.Content.TextOutput} A JSON response.
  */
 function doGet_getOrCreateSheet(e) {
   const FUNC_NAME = "doGet_getOrCreateSheet";
@@ -135,7 +141,7 @@ function doGet_getOrCreateSheet(e) {
 
 /**
  * Creates a generic HTML response for the OAuth landing page.
- * @return {GoogleAppsScript.HTML.HtmlOutput}
+ * @returns {GoogleAppsScript.HTML.HtmlOutput} The HTML output for the landing page.
  */
 function createAuthLandingPage() {
     const htmlOutput = `
@@ -150,8 +156,8 @@ function createAuthLandingPage() {
 
 /**
  * Creates a standardized JSON response object.
- * @param {object} payload - The JSON payload to send.
- * @return {GoogleAppsScript.Content.TextOutput}
+ * @param {object} payload The JSON payload to send.
+ * @returns {GoogleAppsScript.Content.TextOutput} The JSON response object.
  */
 function createJsonResponse(payload) {
   return ContentService.createTextOutput(JSON.stringify(payload))
@@ -161,8 +167,8 @@ function createJsonResponse(payload) {
 /**
  * Handles the logic for getting an existing sheet or creating a new one for the user.
  * This is the primary endpoint for the extension's "Manage Job Tracker" button.
- * @param {object} e The event parameter from the GET request.
- * @return {GoogleAppsScript.Content.TextOutput} A JSON response.
+ * @param {GoogleAppsScript.Events.DoGet} e The event parameter from the GET request.
+ * @returns {GoogleAppsScript.Content.TextOutput} A JSON response.
  */
 function doGet_getOrCreateSheet(e) {
   const FUNC_NAME = "doGet_getOrCreateSheet";
@@ -226,8 +232,8 @@ function doGet_getOrCreateSheet(e) {
 
 /**
  * Handles GET requests for aggregated weekly application data.
- * @param {object} e The event parameter from the GET request.
- * @return {GoogleAppsScript.Content.TextOutput} A JSON response.
+ * @param {GoogleAppsScript.Events.DoGet} e The event parameter from the GET request.
+ * @returns {GoogleAppsScript.Content.TextOutput} A JSON response.
  */
 function doGet_WeeklyApplicationData(e) {
   const FUNC_NAME = "doGet_WeeklyApplicationData";
@@ -352,8 +358,8 @@ function doPost(e) {
 
 /**
  * Handles GET requests to retrieve the stored Gemini API key for the authenticated user.
- * @param {object} e The event parameter from the GET request.
- * @return {GoogleAppsScript.Content.TextOutput} A JSON response containing the API key or an error.
+ * @param {GoogleAppsScript.Events.DoGet} e The event parameter from the GET request.
+ * @returns {GoogleAppsScript.Content.TextOutput} A JSON response containing the API key or an error.
  */
 function doGet_getApiKeyForScript(e) {
   const FUNC_NAME = "doGet_getApiKeyForScript";

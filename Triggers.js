@@ -1,12 +1,13 @@
-// File: Triggers.gs
-// Description: Contains functions for creating, verifying, and managing
-// time-driven triggers for the project.
+/**
+ * @file Contains functions for creating, verifying, and managing
+ * time-driven triggers for the project.
+ */
 
 /**
  * Creates or verifies a time-based trigger for a given function to run every X hours.
- * @param {string} functionName The name of the function to trigger.
- * @param {number} hours The interval in hours.
- * @return {boolean} True if a new trigger was created, false if it already existed or an error occurred.
+ * @param {string} [functionName='processJobApplicationEmails'] The name of the function to trigger.
+ * @param {number} [hours=1] The interval in hours.
+ * @returns {boolean} True if a new trigger was created, false if it already existed or an error occurred.
  */
 function createTimeDrivenTrigger(functionName = 'processJobApplicationEmails', hours = 1) {
   let exists = false;
@@ -51,9 +52,9 @@ function createTimeDrivenTrigger(functionName = 'processJobApplicationEmails', h
 
 /**
  * Creates or verifies a daily time-based trigger for a given function to run at a specific hour.
- * @param {string} functionName The name of the function to trigger.
- * @param {number} hour The hour of the day (0-23) in the script's timezone.
- * @return {boolean} True if a new trigger was created, false if it already existed or an error occurred.
+ * @param {string} [functionName='markStaleApplicationsAsRejected'] The name of the function to trigger.
+ * @param {number} [hour=2] The hour of the day (0-23) in the script's timezone.
+ * @returns {boolean} True if a new trigger was created, false if it already existed or an error occurred.
  */
 function createOrVerifyStaleRejectTrigger(functionName = 'markStaleApplicationsAsRejected', hour = 2) { // Default to 2 AM
   let exists = false;

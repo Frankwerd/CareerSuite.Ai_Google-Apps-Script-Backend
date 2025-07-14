@@ -325,16 +325,6 @@ function initialSetup_LabelsAndSheet(activeSS) {
         if (createOrVerifyStaleRejectTrigger('markStaleApplicationsAsRejected', 2)) messages.push("Trigger 'markStaleApplicationsAsRejected': CREATED."); 
         else messages.push("Trigger 'markStaleApplicationsAsRejected': Exists/Verified.");
         
-        // Add calls for new triggers
-        if (typeof createDailyReportTrigger === "function") {
-          if (createDailyReportTrigger()) messages.push("Trigger 'dailyReport': CREATED.");
-          else messages.push("Trigger 'dailyReport': Exists/Verified.");
-        } else { Logger.log(`[${FUNC_NAME} WARN] createDailyReportTrigger function not found.`); messages.push("Trigger 'dailyReport': SKIPPED (function missing).");}
-
-        if (typeof createOnEditTrigger === "function") {
-          if (createOnEditTrigger()) messages.push("Trigger 'handleCellEdit' (onEdit): CREATED.");
-          else messages.push("Trigger 'handleCellEdit' (onEdit): Exists/Verified.");
-        } else { Logger.log(`[${FUNC_NAME} WARN] createOnEditTrigger function not found.`); messages.push("Trigger 'handleCellEdit' (onEdit): SKIPPED (function missing).");}
 
     } catch(e) {
         Logger.log(`[${FUNC_NAME} ERROR] Trigger setup failed: ${e.toString()}`);
@@ -963,29 +953,6 @@ function userDrivenFullSetup() {
   }
 }
 
-// --- Placeholder functions for new triggers ---
-/**
- * Placeholder for daily report functionality.
- * Triggered by a time-based trigger created programmatically.
- */
-function dailyReport() {
-  // This function will be triggered daily in the user's account
-  Logger.log('Executing dailyReport in user account: ' + new Date());
-  // ... logic for daily report ...
-  // Example: SpreadsheetApp.getUi().alert('Daily Report', 'Daily report executed!', SpreadsheetApp.getUi().ButtonSet.OK);
-}
-
-/**
- * Placeholder for handling cell edits.
- * Triggered by an installable onEdit trigger created programmatically.
- * @param {Object} e The event object.
- */
-function handleCellEdit(e) {
-  // This function will be triggered on edits in the user's sheet
-  Logger.log('Cell edited in user account: ' + (e && e.range ? e.range.getA1Notation() : 'N/A'));
-  // ... logic for handling edits ...
-  // Example: if (e && e.value === "TEST_EDIT") { e.range.getSheet().getRange("A1").setValue("Edit Detected!"); }
-}
 
 function activateAiFeatures() {
   const FUNC_NAME = "activateAiFeatures";

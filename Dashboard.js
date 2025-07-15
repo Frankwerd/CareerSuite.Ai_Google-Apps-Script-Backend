@@ -188,7 +188,7 @@ function setupHelperSheetFormulas(helperSheet) {
     Logger.log(`[${FUNC_NAME} ERROR] Invalid helperSheet object passed.`);
     return false;
   }
-  Logger.log(`[${FUNC_NAME} INFO] Setting up formulas in "${helperSheet.getName()}" based on OLD LOGIC structure.`);
+  Logger.log(`[${FUNC_NAME} INFO] Setting up formulas in "${helperSheet.getName()}" based on NEW LOGIC structure.`);
 
   try {
     // Clear existing content to ensure clean state for new formulas
@@ -200,65 +200,51 @@ function setupHelperSheetFormulas(helperSheet) {
     }
 
     // --- Define sheet references and column letters needed for formulas ---
-    // These constants MUST be available from Config.gs
-    const appSheetNameForFormula = `'${APP_TRACKER_SHEET_TAB_NAME}'!`; // e.g., "'Applications'!"
+    const appSheetNameForFormula = `'${APP_TRACKER_SHEET_TAB_NAME}'!`;
     const platformColLetter = _columnToLetter_DashboardLocal(PLATFORM_COL);
     const emailDateColLetter = _columnToLetter_DashboardLocal(EMAIL_DATE_COL);
-    const peakStatusColLetter = _columnToLetter_DashboardLocal(PEAK_STATUS_COL);
-    const companyColLetter = _columnToLetter_DashboardLocal(COMPANY_COL); // Used for "Total Applications" in funnel
+    const statusColLetter = _columnToLetter_DashboardLocal(STATUS_COL);
+    const companyColLetter = _columnToLetter_DashboardLocal(COMPANY_COL);
 
-    // --- 1. Platform Distribution Data (Formulas for Helper Columns A:B) ---
-    helperSheet.getRange("A1").setValue("Platform");
-    helperSheet.getRange("B1").setValue("Count");
-    // This QUERY formula gets unique platforms and their counts from Applications sheet's platform column
+    // --- 1. Platform Distribution Data (Formulas for Helper Columns P:Q) ---
+    helperSheet.getRange("P1").setValue("Platform");
+    helperSheet.getRange("Q1").setValue("Count");
     const platformQueryFormula = `=IFERROR(QUERY(${appSheetNameForFormula}${platformColLetter}2:${platformColLetter}, "SELECT Col1, COUNT(Col1) WHERE Col1 IS NOT NULL AND Col1 <> '' GROUP BY Col1 ORDER BY COUNT(Col1) DESC LABEL Col1 '', COUNT(Col1) ''", 0), {"No Platform Data",0})`;
-    helperSheet.getRange("A2").setFormula(platformQueryFormula);
-    Logger.log(`[${FUNC_NAME} INFO] Platform distribution formula set in Helper A2: ${platformQueryFormula}`);
+    helperSheet.getRange("P2").setFormula(platformQueryFormula);
+    Logger.log(`[${FUNC_NAME} INFO] Platform distribution formula set in Helper P2: ${platformQueryFormula}`);
 
-    // --- 2. Data for Applications Over Time (Weekly) Chart ---
-    // Intermediate calculation columns (J & K) for weekly data as per your "OLD LOGIC"
-    helperSheet.getRange("J1").setValue("RAW_VALID_DATES_FOR_WEEKLY");
-    const rawDatesFormula = `=IFERROR(FILTER(${appSheetNameForFormula}${emailDateColLetter}2:${emailDateColLetter}, ISNUMBER(${appSheetNameForFormula}${emailDateColLetter}2:${emailDateColLetter})), "")`;
-    helperSheet.getRange("J2").setFormula(rawDatesFormula);
-    helperSheet.getRange("J2:J").setNumberFormat("yyyy-mm-dd hh:mm:ss"); // Original format for raw dates
+    // --- 2. Data for Applications Over Time (Weekly) Chart (Helper Columns R:S) ---
+    helperSheet.getRange("R1").setValue("Week Starting");
+    helperSheet.getRange("S1").setValue("Applications");
+    const weeklyFormula = `=ARRAYFORMULA(QUERY(IFERROR(DATE(YEAR(${appSheetNameForFormula}${emailDateColLetter}2:${emailDateColLetter}), MONTH(${appSheetNameForFormula}${emailDateColLetter}2:${emailDateColLetter}), DAY(${appSheetNameForFormula}${emailDateColLetter}2:${emailDateColLetter}) - WEEKDAY(${appSheetNameForFormula}${emailDateColLetter}2:${emailDateColLetter}, 2) + 1)), "SELECT Col1, COUNT(Col1) WHERE Col1 IS NOT NULL GROUP BY Col1 ORDER BY Col1 ASC LABEL COUNT(Col1) ''", 0))`;
+    helperSheet.getRange("R2").setFormula(weeklyFormula);
+    helperSheet.getRange("R2:S").setNumberFormat("M/d/yyyy");
+    Logger.log(`[${FUNC_NAME} INFO] Weekly applications formula set in Helper R2.`);
 
-    helperSheet.getRange("K1").setValue("CALCULATED_WEEK_STARTS (Mon)");
-    // Formula for Monday as week start: DATE(YEAR(J2), MONTH(J2), DAY(J2) - WEEKDAY(J2,2) + 1)
-    const weekStartCalcFormula = `=ARRAYFORMULA(IF(ISBLANK(J2:J), "", DATE(YEAR(J2:J), MONTH(J2:J), DAY(J2:J) - WEEKDAY(J2:J, 2) + 1)))`;
-    helperSheet.getRange("K2").setFormula(weekStartCalcFormula);
-    helperSheet.getRange("K2:K").setNumberFormat("yyyy-mm-dd"); // Original format for calculated week starts
-
-    // Final aggregated weekly data for chart (Helper Columns D:E)
-    helperSheet.getRange("D1").setValue("Week Starting"); // Header for chart data source
-    const uniqueWeeksFormula = `=IFERROR(SORT(UNIQUE(FILTER(K2:K, K2:K<>""))), {"No Date Data"})`; // Get unique week start dates from K
-    helperSheet.getRange("D2").setFormula(uniqueWeeksFormula);
-    helperSheet.getRange("D2:D").setNumberFormat("M/d/yyyy"); // Chart-friendly date format for axis
-
-    helperSheet.getRange("E1").setValue("Applications"); // Header for chart data source
-    // Count applications for each unique week start date
-    const weeklyCountsFormula = `=ARRAYFORMULA(IF(D2:D="", "", COUNTIF(K2:K, D2:D)))`;
-    helperSheet.getRange("E2").setFormula(weeklyCountsFormula);
-    helperSheet.getRange("E2:E").setNumberFormat("0");
-    Logger.log(`[${FUNC_NAME} INFO] Weekly applications formulas set in Helper (D2, E2 using intermediate J:K).`);
-
-    // --- 3. Data for Application Funnel (Peak Stages) Chart (Helper Columns G:H) ---
-    helperSheet.getRange("G1").setValue("Stage"); 
-    helperSheet.getRange("H1").setValue("Count");
-    const funnelStagesValues = [DEFAULT_STATUS, APPLICATION_VIEWED_STATUS, ASSESSMENT_STATUS, INTERVIEW_STATUS, OFFER_STATUS]; // From Config.gs
-    
-    // Write stage names to column G
-    helperSheet.getRange(2, 7, funnelStagesValues.length, 1).setValues(funnelStagesValues.map(stage => [stage]));
-    
-    // Set formulas for counts in column H
-    // First stage (e.g., "Applied") often represents total applications. Your old logic had this for H2:
-    helperSheet.getRange("H2").setFormula(`=IFERROR(COUNTA(${appSheetNameForFormula}${companyColLetter}2:${companyColLetter}),0)`); 
-    // For subsequent stages, count based on Peak Status matching the stage in column G
-    for (let i = 1; i < funnelStagesValues.length; i++) { // Starts from the second stage in your array
-      // Example: For row 3 (second stage), formula in H3 refers to G3
-      helperSheet.getRange(i + 2, 8).setFormula(`=IFERROR(COUNTIF(${appSheetNameForFormula}${peakStatusColLetter}2:${peakStatusColLetter}, G${i + 2}),0)`);
+    // --- 3. Data for Application Funnel (Peak Stages) Chart (Helper Columns A:O) ---
+    const headers = DASHBOARD_HELPER_HEADERS;
+    for (let i = 0; i < headers.length; i++) {
+      helperSheet.getRange(1, i + 1).setValue(headers[i]);
     }
-    Logger.log(`[${FUNC_NAME} INFO] Funnel stage formulas set in Helper G:H.`);
-    
+
+    helperSheet.getRange("A2").setFormula(`=IFERROR(COUNTA(${appSheetNameForFormula}${companyColLetter}2:${companyColLetter}), 0)`);
+    helperSheet.getRange("B2").setFormula(`=IFERROR(COUNTIF(${appSheetNameForFormula}${statusColLetter}2:${statusColLetter}, "${DEFAULT_STATUS}"), 0)`);
+    helperSheet.getRange("C2").setFormula(`=IFERROR(COUNTIF(${appSheetNameForFormula}${statusColLetter}2:${statusColLetter}, "Screening"), 0)`);
+    helperSheet.getRange("D2").setFormula(`=IFERROR(COUNTIF(${appSheetNameForFormula}${statusColLetter}2:${statusColLetter}, "${ASSESSMENT_STATUS}"), 0)`);
+    helperSheet.getRange("E2").setFormula(`=IFERROR(COUNTIF(${appSheetNameForFormula}${statusColLetter}2:${statusColLetter}, "${INTERVIEW_STATUS}"), 0)`);
+    helperSheet.getRange("F2").setFormula(`=IFERROR(COUNTIF(${appSheetNameForFormula}${statusColLetter}2:${statusColLetter}, "Interview 1"), 0)`);
+    helperSheet.getRange("G2").setFormula(`=IFERROR(COUNTIF(${appSheetNameForFormula}${statusColLetter}2:${statusColLetter}, "Interview 2"), 0)`);
+    helperSheet.getRange("H2").setFormula(`=IFERROR(COUNTIF(${appSheetNameForFormula}${statusColLetter}2:${statusColLetter}, "Interview 3+"), 0)`);
+    helperSheet.getRange("I2").setFormula(`=IFERROR(COUNTIF(${appSheetNameForFormula}${statusColLetter}2:${statusColLetter}, "Final Interview"), 0)`);
+    helperSheet.getRange("J2").setFormula(`=IFERROR(COUNTIF(${appSheetNameForFormula}${statusColLetter}2:${statusColLetter}, "${OFFER_STATUS}"), 0)`);
+    helperSheet.getRange("K2").setFormula(`=IFERROR(COUNTIF(${appSheetNameForFormula}${statusColLetter}2:${statusColLetter}, "${ACCEPTED_STATUS}"), 0)`);
+    helperSheet.getRange("L2").setFormula(`=IFERROR(COUNTIF(${appSheetNameForFormula}${statusColLetter}2:${statusColLetter}, "${REJECTED_STATUS}"), 0)`);
+    helperSheet.getRange("M2").setFormula(`=IFERROR(COUNTIF(${appSheetNameForFormula}${statusColLetter}2:${statusColLetter}, "${WITHDRAWN_STATUS}"), 0)`);
+    helperSheet.getRange("N2").setFormula(`=IFERROR(COUNTIF(${appSheetNameForFormula}${statusColLetter}2:${statusColLetter}, "${KEEP_IN_VIEW_STATUS}"), 0)`);
+    helperSheet.getRange("O2").setFormula(`=IFERROR(COUNTIF(${appSheetNameForFormula}${statusColLetter}2:${statusColLetter}, "${MANUAL_REVIEW_NEEDED}"), 0)`);
+
+    Logger.log(`[${FUNC_NAME} INFO] Funnel stage formulas set in Helper A2:O2.`);
+
     SpreadsheetApp.flush(); // Ensure formulas calculate initially
     return true;
   } catch (e) {

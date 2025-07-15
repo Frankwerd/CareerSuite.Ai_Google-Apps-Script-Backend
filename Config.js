@@ -183,8 +183,7 @@ const DEFAULT_PLATFORM = "Email/Website"; // Default if no specific platform det
 // --- Dashboard Configuration ---
 // Headers for the hidden "DashboardHelperData" sheet.
 const DASHBOARD_HELPER_HEADERS = [
-  "Status", "Count", "Rolling Week Applications", "Week Starting", "Applications", 
-  "Application Funnel Stage", "Funnel Count", "Platform Name", "Platform Count"
+  "Total Applications", "Applied", "Screening", "Assessment", "Interviewing", "Interview 1", "Interview 2", "Interview 3+", "Final Interview", "Offer", "Accepted Offer", "Rejected", "Withdrawn", "Keep In View", "Manual Review Needed", "Platform Name", "Platform Count", "Week Starting", "Applications"
 ];
 const HELPER_SHEET_COLUMN_WIDTHS = [150, 70, 180, 120, 100, 200, 100, 150, 100];
 

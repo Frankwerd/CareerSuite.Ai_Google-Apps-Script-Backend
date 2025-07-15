@@ -469,5 +469,17 @@ function updateApplicationFunnelChart(dashboardSheet, helperSheet) {
  * @returns {string[]} An array of hex color codes.
  */
 function BRAND_COLORS_CHART_ARRAY() {
-    return [ BRAND_COLORS.LAPIS_LAZULI, BRAND_COLORS.CAROLINA_BLUE, BRAND_COLORS.HUNYADI_YELLOW, BRAND_COLORS.PALE_ORANGE, BRAND_COLORS.CHARCOAL, "#27AE60", "#8E44AD", "#E67E22", "#16A085", "#C0392B" ];
+    return [
+        BRAND_COLORS.LAPIS_LAZULI,
+        BRAND_COLORS.CAROLINA_BLUE,
+        BRAND_COLORS.HUNYADI_YELLOW,
+        BRAND_COLORS.PALE_ORANGE,
+        BRAND_COLORS.CHARCOAL,
+        // Adding a few more standard, visually distinct colors as fallbacks
+        "#27AE60", // Green
+        "#8E44AD", // Purple
+        "#E67E22", // Orange
+        "#16A085", // Teal
+        "#C0392B"  // Red
+    ];
 }

@@ -104,13 +104,14 @@ This script operates as a **zero-knowledge system** from the developer's perspec
 
 Here is the justification for the sensitive permissions required:
 
-*   **Google Drive (`drive.file` scope)**: We request the secure `drive.file` scope. This permission is sandboxed and **ONLY** allows the script to create and access the "CareerSuite.ai Data" spreadsheet that it generates on the user's behalf. It **CANNOT** access, read, or modify any other files in the user's Google Drive.
+*   **Google Drive (`https://www.googleapis.com/auth/drive` scope)**: This permission is required for the script to create and manage the "CareerSuite.ai Data" spreadsheet in the user's Google Drive. It allows the script to create the sheet, and then open it by its unique ID to add new rows and update charts.
 
-*   **Gmail (`gmail.modify` scope)**: This permission is essential for the core automation of the job tracker. Its use is strictly limited to:
-    1.  Creating the necessary `CareerSuite.AI/...` labels.
-    2.  Creating a filter to route emails to these labels.
-    3.  Reading emails that have been placed in the `.../To Process` label.
-    4.  Modifying an email's labels to move it from `.../To Process` to `.../Processed` after analysis.
-    A `readonly` scope is insufficient as it would prevent the script from updating the email's state, causing an infinite processing loop where the same emails are analyzed repeatedly. The script does not have the ability to read your general inbox, send email, or delete messages.
+*   **Google Sheets (`https://www.googleapis.com/auth/spreadsheets` scope)**: This permission is necessary for the script to write data to and read data from the "CareerSuite.ai Data" spreadsheet. It is used to populate the "Applications" and "Potential Job Leads" sheets, as well as to update the dashboard with the latest metrics.
+
+*   **Gmail (`https://www.googleapis.com/auth/gmail.readonly`, `https://www.googleapis.com/auth/gmail.labels`, and `https://www.googleapis.com/auth/gmail.settings.basic` scopes)**: These permissions are used to automate the job tracking process. The script uses these permissions to:
+    1.  Create the necessary `CareerSuite.AI/...` labels in the user's Gmail account.
+    2.  Create a filter to automatically route job-related emails to the appropriate labels.
+    3.  Read emails that have been placed in the `.../To Process` label.
+    4.  Modify an email's labels to move it from `.../To Process` to `.../Processed` after it has been analyzed.
 
 For a complete overview of our data practices, please see our full [Privacy Policy](https://careersuiteai.vercel.app/privacy).

@@ -324,15 +324,10 @@ function processJobLeads() {
     }
 
     if (newJobs.length > 0) {
-        const rows = newJobs.map(job => {
-            const row = [];
-            for (const header of LEADS_SHEET_HEADERS) {
-                row.push(job[header] || "");
-            }
-            return row;
-        });
-        leadsDataSheet.getRange(leadsDataSheet.getLastRow() + 1, 1, rows.length, LEADS_SHEET_HEADERS.length).setValues(rows);
-        Logger.log(`[${FUNC_NAME} INFO] Batch appended ${newJobs.length} new jobs to the sheet.`);
+        Logger.log(`[${FUNC_NAME} INFO] Writing ${newJobs.length} new job(s) to the sheet.`);
+        for (const job of newJobs) {
+            writeJobDataToSheet_forLeads(leadsDataSheet, job, leadsHeaderMap);
+        }
     }
 
     Logger.log(`\n==== ${FUNC_NAME}: FINISHED (${new Date().toLocaleString()}) === Messages Attempted This Run: ${messagesProcessedThisRunCounter}. Total Time: ${(new Date().getTime() - SCRIPT_START_TIME.getTime()) / 1000}s ====`);

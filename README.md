@@ -74,7 +74,7 @@ The following diagram illustrates the flow of data. All components under "User's
 *   `GmailUtils.gs`: Contains helper functions for interacting with Gmail, primarily for creating and managing labels (`getOrCreateLabel`).
 *   `Leads_Main.gs`: Contains the primary functions for the Job Leads Tracker module, including initial setup of the leads sheet/labels/filters and the ongoing processing of job lead emails.
 *   `Leads_SheetUtils.gs`: Contains utility functions specifically for the "Potential Job Leads" sheet, such as writing new job data, retrieving processed email IDs, and mapping column headers.
-*   `Dashboard.gs`: Manages the creation, formatting, and data population of the "Dashboard" and "DashboardHelperData" sheets, including chart creation and formula setup.
+*   `Dashboard.gs`: Manages the creation, formatting, and data population of the "Dashboard" and "DashboardHelperData" sheets, including chart creation and formula setup. It also creates the "Job Data" sheet, which contains a more detailed breakdown of application statuses.
 *   `ParsingUtils.gs`: Contains functions dedicated to parsing email content (subject, body, sender) using regular expressions and keyword matching as a fallback or supplement to AI parsing.
 *   `Triggers.gs`: Includes functions for creating, verifying, and managing the time-driven triggers that automate the script's execution (e.g., checking for new emails every hour).
 *   `AdminUtils.gs`: Provides utility functions for project setup and configuration, such as managing API keys stored in `UserProperties`.

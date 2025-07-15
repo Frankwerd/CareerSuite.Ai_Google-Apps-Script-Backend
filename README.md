@@ -113,4 +113,4 @@ Here is the justification for the sensitive permissions required:
     4.  Modifying an email's labels to move it from `.../To Process` to `.../Processed` after analysis.
     A `readonly` scope is insufficient as it would prevent the script from updating the email's state, causing an infinite processing loop where the same emails are analyzed repeatedly. The script does not have the ability to read your general inbox, send email, or delete messages.
 
-For a complete overview of our data practices, please see our full [Privacy Policy](https_example_com_privacy).
+For a complete overview of our data practices, please see our full [Privacy Policy]((https://careersuiteai.vercel.app/privacy).

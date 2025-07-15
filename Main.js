@@ -246,6 +246,7 @@ function initialSetup_LabelsAndSheet(activeSS) {
     if (!setupHelperSheetFormulas(helperSheet)) { // Call from Dashboard.gs to set formulas
         throw new Error(`Setting formulas FAILED for sheet: '${HELPER_SHEET_NAME}'.`);
     }
+    updateDashboardMetrics(dashboardSheet, helperSheet, dataSh);
     if (!helperSheet.isSheetHidden()) helperSheet.hideSheet();
     helperSheet.setTabColor(BRAND_COLORS.CHARCOAL); // From Config.gs
     messages.push(`Sheet '${HELPER_SHEET_NAME}': Setup OK (Headers & Formulas set). Hidden. Color: Charcoal.`);
@@ -349,8 +350,10 @@ function initialSetup_LabelsAndSheet(activeSS) {
   if(moduleSuccess) {
     Logger.log(`[${FUNC_NAME} INFO] Setting up triggers for Tracker module...`);
     try { // Assumes createTimeDrivenTrigger & createOrVerifyStaleRejectTrigger are in Triggers.gs
-        if (createTimeDrivenTrigger('processEmailsAndMarkStale', 1)) messages.push("Trigger 'processEmailsAndMarkStale': CREATED.");
-        else messages.push("Trigger 'processEmailsAndMarkStale': Exists/Verified.");
+        if (createTimeDrivenTrigger('processJobApplicationEmails', 1)) messages.push("Trigger 'processJobApplicationEmails': CREATED.");
+        else messages.push("Trigger 'processJobApplicationEmails': Exists/Verified.");
+        if (createOrVerifyStaleRejectTrigger('markStaleApplicationsAsRejected', 2)) messages.push("Trigger 'markStaleApplicationsAsRejected': CREATED.");
+        else messages.push("Trigger 'markStaleApplicationsAsRejected': Exists/Verified.");
     } catch(e) {
         Logger.log(`[${FUNC_NAME} ERROR] Trigger setup failed: ${e.toString()}`);
         messages.push(`Trigger setup FAILED: ${e.message}.`);
@@ -364,20 +367,6 @@ function initialSetup_LabelsAndSheet(activeSS) {
   return { success: moduleSuccess, messages: messages };
 }
 
-/**
- * A wrapper function that processes job application emails and then marks stale applications.
- * This is intended to be called by a time-driven trigger.
- */
-function processEmailsAndMarkStale() {
-    const { spreadsheet: ss } = getOrCreateSpreadsheetAndSheet();
-    if (!ss) {
-        Logger.log(`[processEmailsAndMarkStale FATAL ERROR] Main spreadsheet could not be accessed. Aborting.`);
-        return;
-    }
-    const scriptProperties = PropertiesService.getScriptProperties();
-    processJobApplicationEmails(ss, scriptProperties);
-    markStaleApplicationsAsRejected(ss);
-}
 
 
 /**
@@ -933,6 +922,7 @@ function onOpen(e) {
 function userDrivenFullSetup() {
   const ui = SpreadsheetApp.getUi();
   const scriptProperties = PropertiesService.getScriptProperties();
+  const menuName = CUSTOM_MENU_NAME || '⚙️ CareerSuite.AI Tools';
   const setupCompleteFlag = 'initialSetupDone_vCSAI_1';
   const pendingSetupFlag = 'pendingUserInitiatedSetup_vCSAI_1';
   let activeSS;

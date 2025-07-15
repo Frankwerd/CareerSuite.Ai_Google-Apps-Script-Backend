@@ -27,35 +27,52 @@ The architecture of this backend is guided by a steadfast commitment to user pri
 
 The following diagram illustrates the flow of data. All components under "User's Google Cloud Account" are created and managed by this script and are under the user's exclusive control.
 
-```
-[User's Browser]                                  [User's Google Cloud Account]
-+------------------------------------+           +---------------------------------------------+
-|                                    |           |                                             |
-|  [Chrome Extension]                |  ----1--> |  [Google Apps Script Web App]               |
-|   - UI (Popup, Options)            |           |   - doGet(e)                                |
-|   - Securely stores user API Key   |           |   - doPost(e)                               |
-|                                    |           |                                             |
-+------------------------------------+           |             |                               |
-                                                 |             |                               |
-                                                 |             2                               |
-                                                 |             |                               |
-                                                 |   +-------------------+                     |
-                                                 |   | [GeminiService.gs]| --------3--------> [Google Gemini API]
-                                                 |   +-------------------+                     |
-                                                 |             |                               |
-                                                 |             4                               |
-                                                 |             |                               |
-                                                 |   +-------------------+   +-----------------+
-                                                 |   |  [SheetUtils.gs]|-->| [Google Sheet]  |
-                                                 |   +-------------------+   +-----------------+
-                                                 |             |                               |
-                                                 |             5                               |
-                                                 |             |                               |
-                                                 |   +-------------------+   +-----------------+
-                                                 |   |   [GmailUtils.gs] |-->|   [Gmail]       |
-                                                 |   +-------------------+   +-----------------+
-                                                 |                                             |
-                                                 +---------------------------------------------+
+```mermaid
+graph TD
+    %% Define Parent Containers
+    subgraph "User's Browser"
+        subgraph " "
+            direction TB
+            A["<b>Chrome Extension</b><br/>- UI (Popup, Options)<br/>- Securely stores user API Key"]
+        end
+    end
+
+    subgraph "User's Google Cloud Account"
+        B["<b>Google Apps Script Web App</b><br/><br/>- doGet(e)<br/>- doPost(e)"]
+        D["[SheetUtils.gs]"]
+        E["[GmailUtils.gs]"]
+        C["[GeminiService.gs]"]
+        F["[Google Sheet]"]
+        G["[Gmail]"]
+    end
+
+    subgraph "External API"
+        H["[Google Gemini API]"]
+    end
+
+    %% Define Connections
+    A -- "1" --> B
+    B -- "4" --> D
+    B -- "5" --> E
+    B -- "2" --> C
+    C -- "3" --> H
+    D --> F
+    E --> G
+    
+    %% Apply Styling to Match Colors
+    style A fill:#cce5ff,stroke:#007bff
+    style B fill:#d4edda,stroke:#155724
+    style C fill:#f8f9fa,stroke:#343a40
+    style D fill:#f8f9fa,stroke:#343a40
+    style E fill:#f8f9fa,stroke:#343a40
+    style F fill:#e9d8f3,stroke:#6f42c1
+    style G fill:#e9d8f3,stroke:#6f42c1
+    style H fill:#fff3cd,stroke:#856404
+
+    %% Style the subgraph containers
+    style `User's Browser` fill:#fefefe,stroke:#adb5bd,stroke-width:1px
+    style `User's Google Cloud Account` fill:#fff9e6,stroke:#adb5bd,stroke-width:1px
+    style `External API` fill:#fff9e6,stroke:#adb5bd,stroke-width:1px
 ```
 
 1.  **Authenticated Request**: The CareerSuite.ai Chrome Extension makes a secure `fetch` request to the Apps Script Web App endpoint (e.g., to create a sheet or sync an API key). This request is authenticated with the user's Google OAuth token, ensuring only the user can trigger their own backend.

@@ -32,6 +32,7 @@ const MASTER_SCRIPT_ID = "12suq_wdzxKZy7S7MJ9bB2a2-DxiN_Kl5mUVHupR-YAqT-_54eU-gQ
 const APP_TRACKER_SHEET_TAB_NAME = "Applications";
 const DASHBOARD_TAB_NAME = "Dashboard";
 const HELPER_SHEET_NAME = "DashboardHelperData"; // This sheet will be hidden by default
+const JOB_DATA_SHEET_NAME = "Job Data"; // This sheet will be hidden by default
 // For Job Leads Tracker
 const LEADS_SHEET_TAB_NAME = "Potential Job Leads";
 
@@ -183,7 +184,8 @@ const DEFAULT_PLATFORM = "Email/Website"; // Default if no specific platform det
 // --- Dashboard Configuration ---
 // Headers for the hidden "DashboardHelperData" sheet.
 const DASHBOARD_HELPER_HEADERS = [
-  "Total Applications", "Applied", "Screening", "Assessment", "Interviewing", "Interview 1", "Interview 2", "Interview 3+", "Final Interview", "Offer", "Accepted Offer", "Rejected", "Withdrawn", "Keep In View", "Manual Review Needed", "Platform Name", "Platform Count", "Week Starting", "Applications"
+  "Status", "Count", "Rolling Week Applications", "Week Starting", "Applications",
+  "Application Funnel Stage", "Funnel Count", "Platform Name", "Platform Count"
 ];
 const HELPER_SHEET_COLUMN_WIDTHS = [150, 70, 180, 120, 100, 200, 100, 150, 100];
 

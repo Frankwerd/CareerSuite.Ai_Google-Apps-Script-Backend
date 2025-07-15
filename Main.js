@@ -251,6 +251,15 @@ function initialSetup_LabelsAndSheet(activeSS) {
     helperSheet.setTabColor(BRAND_COLORS.CHARCOAL); // From Config.gs
     messages.push(`Sheet '${HELPER_SHEET_NAME}': Setup OK (Headers & Formulas set). Hidden. Color: Charcoal.`);
 
+    // A.4: "Job Data" Sheet
+    const jobDataSheet = getOrCreateJobDataSheet(activeSS); // From Dashboard.gs
+    if (!jobDataSheet) throw new Error(`Get/Create FAILED for sheet: '${JOB_DATA_SHEET_NAME}'.`);
+    if (!setupJobDataSheetFormulas(jobDataSheet)) { // From Dashboard.gs
+         throw new Error(`Formatting FAILED for sheet: '${JOB_DATA_SHEET_NAME}'.`);
+    }
+    if (!jobDataSheet.isSheetHidden()) jobDataSheet.hideSheet();
+    messages.push(`Sheet '${JOB_DATA_SHEET_NAME}': Setup OK (Headers & Formulas set). Hidden.`);
+
   } catch (e) {
     Logger.log(`[${FUNC_NAME} ERROR] Core sheet setup failed: ${e.toString()}\nStack: ${e.stack}`);
     messages.push(`Core sheet setup FAILED: ${e.message}.`); moduleSuccess = false;

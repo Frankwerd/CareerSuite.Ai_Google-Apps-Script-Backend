@@ -510,6 +510,15 @@ function processJobApplicationEmails(ss, scriptProperties) {
         const { message, date: emailDateObj, threadId } = entry;
         const emailDate = new Date(emailDateObj);
         const msgId = message.getId();
+        const emailSubject = message.getSubject() || "";
+
+        // --- START: Add Diagnostic Logging ---
+        Logger.log(`--- AI INPUT FOR MSG ID: ${msgId} ---`);
+        Logger.log(`SUBJECT: ${emailSubject}`);
+        Logger.log(`BODY SNIPPET: ${message.getPlainBody().substring(0, 1500)}`);
+        Logger.log(`------------------------------------`);
+        // --- END: Add Diagnostic Logging ---
+
         const processingStartTimeMsg = new Date();
         if (DEBUG_MODE) Logger.log(`\n--- [${FUNC_NAME}] Processing Msg ${i + 1}/${messagesToSort.length} (ID: ${msgId}, Thread: ${threadId}) ---`);
 
@@ -517,7 +526,6 @@ function processJobApplicationEmails(ss, scriptProperties) {
         let plainBodyText = null, requiresManualReview = false, sheetWriteOpSuccessThisMessage = false;
 
         try {
-            const emailSubject = message.getSubject() || "";
             const senderEmail = message.getFrom() || "";
             const emailPermaLink = `https://mail.google.com/mail/u/0/#inbox/${msgId}`;
             const currentTimestamp = new Date();

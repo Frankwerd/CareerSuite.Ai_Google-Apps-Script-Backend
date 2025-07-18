@@ -44,48 +44,6 @@ function doGet(e) {
   }
 }
 
-function doPost(e) {
-  const FUNC_NAME = "WebApp_doPost";
-  try {
-    const userEmail = Session.getEffectiveUser().getEmail();
-    Logger.log(`[${FUNC_NAME}] Received POST request from user: ${userEmail}.`);
-
-    const action = e.parameter.action;
-
-    if (action === 'setApiKey') {
-      Logger.log(`[${FUNC_NAME}] Routing to 'setApiKey' action.`);
-      
-      const postData = JSON.parse(e.postData.contents);
-      const apiKey = postData.apiKey;
-
-      if (!apiKey || typeof apiKey !== 'string' || apiKey.length < 35) {
-        Logger.log(`[${FUNC_NAME} ERROR] 'setApiKey' failed: Invalid API key provided.`);
-        return createJsonResponse({ status: 'error', message: 'Invalid or missing API key provided.' });
-      }
-
-      PropertiesService.getUserProperties().setProperty(GEMINI_API_KEY_PROPERTY, apiKey); // From Config.gs
-
-      Logger.log(`[${FUNC_NAME} SUCCESS] Saved Gemini API key to UserProperties for user ${userEmail}.`);
-      return createJsonResponse({ status: 'success', message: 'API key was successfully saved to the backend.' });
-    }
-
-    Logger.log(`[${FUNC_NAME} WARN] An unknown POST action was requested: "${action}".`);
-    return createJsonResponse({ status: 'error', message: 'Unknown or unsupported POST action.' });
-
-  } catch (error) {
-    Logger.log(`[${FUNC_NAME} CRITICAL ERROR] Error in doPost: ${error.toString()}\nStack: ${error.stack}`);
-    return createJsonResponse({ status: 'error', message: `Server error on POST: ${error.message}` });
-  }
-}
-
-
-/**
- * Handles the logic for getting an existing sheet or creating a new one.
- * This is the primary endpoint for the extension's "Access My Job Tracker" button.
- * @param {GoogleAppsScript.Events.DoGet} e The event parameter from the GET request.
- * @returns {GoogleAppsScript.Content.TextOutput} A JSON response.
- */
-
 /**
  * Creates a generic HTML response for the OAuth landing page.
  * @returns {GoogleAppsScript.HTML.HtmlOutput} The HTML output for the landing page.

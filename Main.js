@@ -359,8 +359,8 @@ function initialSetup_LabelsAndSheet(activeSS) {
   if(moduleSuccess) {
     Logger.log(`[${FUNC_NAME} INFO] Setting up triggers for Tracker module...`);
     try { // Assumes createTimeDrivenTrigger & createOrVerifyStaleRejectTrigger are in Triggers.gs
-        if (createTimeDrivenTrigger('processJobApplicationEmails', 1)) messages.push("Trigger 'processJobApplicationEmails': CREATED.");
-        else messages.push("Trigger 'processJobApplicationEmails': Exists/Verified.");
+        if (createTimeDrivenTrigger('processEmailsAndMarkStale_triggerHandler', 1)) messages.push("Trigger 'processEmailsAndMarkStale_triggerHandler': CREATED.");
+        else messages.push("Trigger 'processEmailsAndMarkStale_triggerHandler': Exists/Verified.");
         if (createOrVerifyStaleRejectTrigger('markStaleApplicationsAsRejected', 2)) messages.push("Trigger 'markStaleApplicationsAsRejected': CREATED.");
         else messages.push("Trigger 'markStaleApplicationsAsRejected': Exists/Verified.");
     } catch(e) {
@@ -377,6 +377,19 @@ function initialSetup_LabelsAndSheet(activeSS) {
 }
 
 
+
+/**
+ * New trigger handler that fetches resources and calls the main processing functions.
+ * This function is designed to be called by a time-based trigger.
+ */
+function processEmailsAndMarkStale_triggerHandler() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const scriptProperties = PropertiesService.getScriptProperties();
+    Logger.log('Trigger handler started. Fetching resources...');
+    processJobApplicationEmails(ss, scriptProperties);
+    markStaleApplicationsAsRejected(ss);
+    Logger.log('Trigger handler finished.');
+}
 
 /**
  * The main function for processing job application emails.
@@ -462,6 +475,23 @@ function processJobApplicationEmails(ss, scriptProperties) {
         return;
     }
 
+    const allSheetData = dataSheet.getDataRange().getValues();
+    const companyIndex = new Map();
+    // Place this code right after getting allSheetData
+    for (let i = 1; i < allSheetData.length; i++) {
+        const rowData = allSheetData[i];
+        const companyName = rowData[COMPANY_COL - 1]; // COMPANY_COL is from Config.js
+        if (companyName && typeof companyName === 'string' && companyName.trim() !== "") {
+            const companyKey = companyName.toLowerCase();
+            if (!companyIndex.has(companyKey)) {
+                companyIndex.set(companyKey, []);
+            }
+            companyIndex.get(companyKey).push({
+                rowNum: i + 1, // 1-based sheet row number
+                rowData: rowData
+            });
+        }
+    }
     const messagesToSort = [];
     let skippedKnownProcessedCount = 0;
     let messageFetchErrorCount = 0;
@@ -580,7 +610,7 @@ function processJobApplicationEmails(ss, scriptProperties) {
             let targetSheetRowForUpdate = -1;
 
             if (companyName !== MANUAL_REVIEW_NEEDED) {
-                const potentialMatches = findRowsByCompanyName(dataSheet, companyName);
+                const potentialMatches = companyIndex.get(String(companyName).toLowerCase()) || [];
                 if (jobTitle !== MANUAL_REVIEW_NEEDED) {
                     existingRowInfoToUpdate = potentialMatches.find(e => e.title && e.title.toLowerCase() === jobTitle.toLowerCase());
                 }
@@ -693,31 +723,6 @@ function processJobApplicationEmails(ss, scriptProperties) {
             Logger.log(`--- [${FUNC_NAME}] End Msg ${i + 1}/${messagesToSort.length} --- Time:${msgProcTime}s ---`);
         }
         Utilities.sleep(200 + Math.floor(Math.random() * 100));
-    }
-
-    function findRowsByCompanyName(dataSheet, companyName) {
-        if (!companyName || companyName === MANUAL_REVIEW_NEEDED) {
-            return [];
-        }
-        const companyNameLc = companyName.toLowerCase();
-        const data = dataSheet.getDataRange().getValues();
-        const matchingRows = [];
-        for (let i = 1; i < data.length; i++) {
-            const row = data[i];
-            const sheetCompanyName = row[COMPANY_COL - 1];
-            if (sheetCompanyName && String(sheetCompanyName).toLowerCase() === companyNameLc) {
-                matchingRows.push({
-                    rowNum: i + 1,
-                    rowData: row,
-                    emailId: row[EMAIL_ID_COL - 1],
-                    company: sheetCompanyName,
-                    title: row[JOB_TITLE_COL - 1],
-                    status: row[STATUS_COL - 1],
-                    peakStatus: row[PEAK_STATUS_COL - 1]
-                });
-            }
-        }
-        return matchingRows;
     }
 
     if (dataToUpdate.length > 0) {
@@ -911,7 +916,7 @@ function onOpen(e) {
       .addItem('Setup: Job Leads Tracker', 'runInitialSetup_JobLeadsModule'));
   menu.addSeparator();
   menu.addSubMenu(ui.createMenu('Manual Processing')
-      .addItem('📧 Process Application Emails', 'processEmailsAndMarkStale')
+      .addItem('📧 Process Application Emails', 'processEmailsAndMarkStale_triggerHandler')
       .addItem('📬 Process Job Leads', 'processJobLeads'));
   menu.addSeparator();
   menu.addSubMenu(ui.createMenu('Admin & Config')

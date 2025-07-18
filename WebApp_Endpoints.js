@@ -44,16 +44,6 @@ function doGet(e) {
   }
 }
 
-/**
- * Handles POST requests to the web app, primarily for saving data like the API key.
- * @param {GoogleAppsScript.Events.DoPost} e The event parameter from the POST request.
- * @returns {GoogleAppsScript.Content.TextOutput} A JSON response.
- */
-/**
- * Handles POST requests to the web app.
- * @param {GoogleAppsScript.Events.DoPost} e The event parameter from the POST request.
- * @returns {GoogleAppsScript.Content.TextOutput} A JSON response.
- */
 function doPost(e) {
   const FUNC_NAME = "WebApp_doPost";
   try {
@@ -95,49 +85,6 @@ function doPost(e) {
  * @param {GoogleAppsScript.Events.DoGet} e The event parameter from the GET request.
  * @returns {GoogleAppsScript.Content.TextOutput} A JSON response.
  */
-function doGet_getOrCreateSheet(e) {
-  const FUNC_NAME = "doGet_getOrCreateSheet";
-  const userEmail = Session.getEffectiveUser().getEmail();
-  const userProps = PropertiesService.getUserProperties();
-  const existingSheetId = userProps.getProperty('userMjmSheetId');
-  
-  if (existingSheetId) {
-    try {
-      const existingSheet = SpreadsheetApp.openById(existingSheetId);
-      Logger.log(`[${FUNC_NAME}] Found existing, valid sheet for ${userEmail}: ID=${existingSheetId}`);
-      return createJsonResponse({
-        status: "success",
-        message: "Sheet already exists.",
-        sheetId: existingSheetId,
-        sheetUrl: existingSheet.getUrl()
-      });
-    } catch (openErr) {
-      Logger.log(`[${FUNC_NAME}] Stored sheet ID ${existingSheetId} was invalid. Clearing property and creating new. Error: ${openErr.message}`);
-      userProps.deleteProperty('userMjmSheetId');
-    }
-  }
-
-  Logger.log(`[${FUNC_NAME}] No valid sheet found for ${userEmail}. Creating from template...`);
-  const templateId = TEMPLATE_SHEET_ID; // From Config.gs
-  if (!templateId || templateId.length < 20) {
-    return createJsonResponse({ status: 'error', message: 'Server configuration error: Master Template Sheet ID is invalid.' });
-  }
-
-  const templateFile = DriveApp.getFileById(templateId);
-  const newFileName = "CareerSuite.AI Data";
-  const newSheetFile = templateFile.makeCopy(newFileName);
-  const newSheetId = newSheetFile.getId();
-  
-  userProps.setProperty('userMjmSheetId', newSheetId);
-  Logger.log(`[${FUNC_NAME}] New sheet created for ${userEmail}. ID: ${newSheetId}`);
-
-  return createJsonResponse({
-    status: "success",
-    message: "Your new sheet was created! Finalizing setup now...",
-    sheetId: newSheetId,
-    sheetUrl: newSheetFile.getUrl()
-  });
-}
 
 /**
  * Creates a generic HTML response for the OAuth landing page.

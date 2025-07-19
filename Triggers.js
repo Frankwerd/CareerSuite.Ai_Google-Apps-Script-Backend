@@ -4,98 +4,60 @@
  */
 
 /**
- * Creates or verifies a time-based trigger for a given function to run every X hours.
- * @param {string} [functionName='processJobApplicationEmails'] The name of the function to trigger.
- * @param {number} [hours=1] The interval in hours.
- * @returns {boolean} True if a new trigger was created, false if it already existed or an error occurred.
+ * Creates or verifies a time-based trigger for a given function.
+ * It checks for the trigger's existence to avoid creating duplicates.
+ * @param {string} functionName The name of the function to trigger.
+ * @param {number} hours The interval in hours.
+ * @returns {boolean} True if a new trigger was created, false if it already existed.
  */
-function createTimeDrivenTrigger(functionName = 'processJobApplicationEmails', hours = 1) {
-  let exists = false;
-  let newTriggerCreated = false;
+function createTimeDrivenTrigger(functionName, hours) {
+  const FUNC_NAME = `createTimeDrivenTrigger for ${functionName}`;
   try {
-    // TEMPLATE CHECK
-    if (typeof TEMPLATE_SHEET_ID === 'undefined' || TEMPLATE_SHEET_ID === "") {
-      Logger.log(`[WARN] TRIGGER (${functionName}): TEMPLATE_SHEET_ID is not defined in Config.js. Cannot reliably skip template. Proceeding with caution.`);
-    } else {
-      const activeSSId = SpreadsheetApp.getActiveSpreadsheet().getId();
-      if (activeSSId === TEMPLATE_SHEET_ID) {
-        Logger.log(`[INFO] TRIGGER (${functionName}): Active sheet is TEMPLATE (ID: ${TEMPLATE_SHEET_ID}). Trigger creation SKIPPED.`);
-        return false; // Do not create trigger on template
-      }
-    }
-
     const existingTriggers = ScriptApp.getProjectTriggers();
-    for (let i = 0; i < existingTriggers.length; i++) {
-      if (existingTriggers[i].getHandlerFunction() === functionName && 
-          existingTriggers[i].getEventType() === ScriptApp.EventType.CLOCK) {
-        // Could add more checks here, e.g., if the schedule matches `everyHours(hours)`
-        // For now, simple existence check is used.
-        exists = true;
-        break;
-      }
-    }
+    const triggerExists = existingTriggers.some(t => t.getHandlerFunction() === functionName);
 
-    if (!exists) {
-      ScriptApp.newTrigger(functionName).timeBased().everyHours(hours).create();
-      Logger.log(`[INFO] TRIGGER: ${hours}-hourly trigger for "${functionName}" CREATED successfully.`);
-      newTriggerCreated = true;
-    } else {
-      Logger.log(`[INFO] TRIGGER: ${hours}-hourly trigger for "${functionName}" ALREADY EXISTS.`);
-    }
-  } catch (e) {
-    Logger.log(`[ERROR] TRIGGER: Failed to create or verify ${hours}-hourly trigger for "${functionName}": ${e.message} (Stack: ${e.stack})`);
-    return false; // Indicate error or no new creation
-  }
-  return newTriggerCreated;
-}
-
-
-/**
- * Creates or verifies a daily time-based trigger for a given function to run at a specific hour.
- * @param {string} [functionName='markStaleApplicationsAsRejected'] The name of the function to trigger.
- * @param {number} [hour=2] The hour of the day (0-23) in the script's timezone.
- * @returns {boolean} True if a new trigger was created, false if it already existed or an error occurred.
- */
-function createOrVerifyStaleRejectTrigger(functionName = 'markStaleApplicationsAsRejected', hour = 2) { // Default to 2 AM
-  let exists = false;
-  let newTriggerCreated = false;
-  try {
-    // TEMPLATE CHECK
-    if (typeof TEMPLATE_SHEET_ID === 'undefined' || TEMPLATE_SHEET_ID === "") {
-      Logger.log(`[WARN] TRIGGER (${functionName}): TEMPLATE_SHEET_ID is not defined in Config.js. Cannot reliably skip template. Proceeding with caution.`);
-    } else {
-      const activeSSId = SpreadsheetApp.getActiveSpreadsheet().getId();
-      if (activeSSId === TEMPLATE_SHEET_ID) {
-        Logger.log(`[INFO] TRIGGER (${functionName}): Active sheet is TEMPLATE (ID: ${TEMPLATE_SHEET_ID}). Trigger creation SKIPPED.`);
-        return false; // Do not create trigger on template
-      }
-    }
-
-    const existingTriggers = ScriptApp.getProjectTriggers();
-    for (let i = 0; i < existingTriggers.length; i++) {
-      if (existingTriggers[i].getHandlerFunction() === functionName &&
-          existingTriggers[i].getEventType() === ScriptApp.EventType.CLOCK) {
-        // Could add more detailed check for daily at specific hour
-        exists = true;
-        break;
-      }
-    }
-
-    if (!exists) {
+    if (!triggerExists) {
       ScriptApp.newTrigger(functionName)
         .timeBased()
-        .everyDays(1)
-        .atHour(hour)
-        .inTimezone(Session.getScriptTimeZone()) // Best practice
+        .everyHours(hours)
         .create();
-      Logger.log(`[INFO] TRIGGER: Daily trigger for "${functionName}" (around ${hour}:00 script timezone) CREATED successfully.`);
-      newTriggerCreated = true;
+      Logger.log(`[${FUNC_NAME} INFO] Trigger CREATED successfully.`);
+      return true;
     } else {
-      Logger.log(`[INFO] TRIGGER: Daily trigger for "${functionName}" ALREADY EXISTS.`);
+      Logger.log(`[${FUNC_NAME} INFO] Trigger ALREADY EXISTS.`);
+      return false;
     }
   } catch (e) {
-    Logger.log(`[ERROR] TRIGGER: Failed to create or verify daily trigger for "${functionName}": ${e.message} (Stack: ${e.stack})`);
-    return false; // Indicate error or no new creation
+    Logger.log(`[${FUNC_NAME} ERROR] Failed to create or verify trigger: ${e.message}`);
+    return false;
   }
-  return newTriggerCreated;
+}
+
+/**
+ * Creates or verifies a daily time-based trigger for marking stale applications.
+ * @returns {boolean} True if a new trigger was created, false if it already existed.
+ */
+function createOrVerifyStaleRejectTrigger() {
+  const FUNC_NAME = 'createOrVerifyStaleRejectTrigger';
+  const HANDLER_FUNCTION = 'markStaleApplicationsAsRejected';
+  try {
+    const existingTriggers = ScriptApp.getProjectTriggers();
+    const triggerExists = existingTriggers.some(t => t.getHandlerFunction() === HANDLER_FUNCTION);
+
+    if (!triggerExists) {
+      ScriptApp.newTrigger(HANDLER_FUNCTION)
+        .timeBased()
+        .everyDays(1)
+        .atHour(2) // Runs around 2 AM in the script's timezone
+        .create();
+      Logger.log(`[${FUNC_NAME} INFO] Daily stale-check trigger CREATED successfully.`);
+      return true;
+    } else {
+      Logger.log(`[${FUNC_NAME} INFO] Daily stale-check trigger ALREADY EXISTS.`);
+      return false;
+    }
+  } catch (e) {
+    Logger.log(`[${FUNC_NAME} ERROR] Failed to create or verify stale-check trigger: ${e.message}`);
+    return false;
+  }
 }

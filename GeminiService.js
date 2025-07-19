@@ -25,117 +25,45 @@ function callGemini_forApplicationDetails(emailSubject, emailBody, apiKey) {
 
   const bodySnippet = emailBody ? emailBody.substring(0, 12000) : ""; // Max 12k chars for body snippet
 
-  // Constants from Config.gs are used here
-  const prompt = `You are a highly specialized AI assistant expert in parsing job application-related emails for a tracking system. Your sole purpose is to analyze the provided email Subject and Body, and extract three key pieces of information: "company_name", "job_title", and "status". You MUST return this information ONLY as a single, valid JSON object, with no surrounding text, explanations, apologies, or markdown.
+// --- START: Replacement for the prompt in callGemini_forApplicationDetails ---
+const prompt = `You are a highly specialized AI assistant expert in parsing job application-related emails for a tracking system. Your sole purpose is to analyze the provided email Subject and Body, and extract three key pieces of information: "company_name", "job_title", and "status". You MUST return this information ONLY as a single, valid JSON object, with no surrounding text, explanations, apologies, or markdown.
 
 CRITICAL INSTRUCTIONS - READ AND FOLLOW CAREFULLY:
 
-**PRIORITY 1: Determine Relevance - IS THIS A JOB APPLICATION UPDATE FOR THE RECIPIENT?**
-- Your FIRST task is to assess if the email DIRECTLY relates to a job application previously submitted by the recipient, or an update to such an application.
-- **IF THE EMAIL IS NOT APPLICATION-RELATED:** This includes general newsletters, marketing or promotional emails, sales pitches, webinar invitations, event announcements, account security alerts, password resets, bills/invoices, platform notifications not tied to a specific submitted application (e.g., "new jobs you might like"), or spam.
-    - In such cases, IMMEDIATELY set ALL three fields ("company_name", "job_title", "status") to the exact string "${MANUAL_REVIEW_NEEDED}".
-    - Do NOT attempt to extract any information from these irrelevant emails.
-    - Your output for these MUST be: {"company_name": "${MANUAL_REVIEW_NEEDED}","job_title": "${MANUAL_REVIEW_NEEDED}","status": "${MANUAL_REVIEW_NEEDED}"}
-
-**PRIORITY 2: If Application-Related, Proceed with Extraction:**
-
 1.  "company_name":
-    *   **Goal**: Extract the full, official name of the HIRING COMPANY to which the user applied.
-    *   **ATS Handling**: Emails often originate from Applicant Tracking Systems (ATS) like Greenhouse (notifications@greenhouse.io), Lever (no-reply@hire.lever.co), Workday, Taleo, iCIMS, Ashby, SmartRecruiters, etc. The sender domain may be the ATS. You MUST identify the actual hiring company mentioned WITHIN the email subject or body. Look for phrases like "Your application to [Hiring Company]", "Careers at [Hiring Company]", "Update from [Hiring Company]", or the company name near the job title.
-    *   **Do NOT extract**: The name of the ATS (e.g., "Greenhouse", "Lever"), the name of the job board (e.g., "LinkedIn", "Indeed", "Wellfound" - unless the job board IS the direct hiring company), or generic terms.
-    *   **Ambiguity**: If the hiring company name is genuinely unclear from an application context, or only an ATS name is present without the actual company, use "${MANUAL_REVIEW_NEEDED}".
-    *   **Accuracy**: Prefer full legal names if available (e.g., "Acme Corporation" over "Acme").
+    *   Extract the full, official name of the HIRING COMPANY.
+    *   Do NOT extract the name of the ATS (e.g., "Greenhouse") or the job board (e.g., "LinkedIn").
+    *   If the company name is genuinely unclear, use the exact string "${MANUAL_REVIEW_NEEDED}".
 
 2.  "job_title":
-    *   **Goal**: Extract the SPECIFIC job title THE USER APPLIED FOR, as mentioned in THIS email. The title is often explicitly stated after phrases like "your application for...", "application to the position of...", "the ... role", or directly alongside the company name in application submission/viewed confirmations.
-    *   **LinkedIn Emails ("Application Sent To..." / "Application Viewed By...")**: These emails (often from sender "LinkedIn") frequently state the company name AND the job title the user applied for directly in the main body or a prominent header within the email content. Scrutinize these carefully for both. Example: "Your application for **Senior Product Manager** was sent to **Innovate Corp**." or "A recruiter from **Innovate Corp** viewed your application for **Senior Product Manager**." Extract "Senior Product Manager".
-    *   **ATS Confirmation Emails (e.g., from Greenhouse, Lever)**: These emails confirming receipt of an application (e.g., "We've received your application to [Company]") often DO NOT restate the specific job title within the body of *that specific confirmation email*. If the job title IS NOT restated, you MUST use "${MANUAL_REVIEW_NEEDED}" for the job_title. Do not assume it from the subject line unless the subject clearly states "Your application for [Job Title] at [Company]".
-    *   **General Updates/Rejections**: Some updates or rejections may or may not restate the title. If the title of the specific application is not clearly present in THIS email, use "${MANUAL_REVIEW_NEEDED}".
-    *   **Strict Rule**: Do NOT infer a job title from company career pages, other listed jobs, or generic phrases like "various roles" unless that phrase directly follows "your application for". Only extract what is stated for THIS specific application event in THIS email. If in doubt, or if only a very generic descriptor like "a role" is used without specifics, prefer "${MANUAL_REVIEW_NEEDED}".
+    *   Extract the SPECIFIC job title the user applied for as mentioned in THIS email.
+    *   If the job title is not clearly present, use the exact string "${MANUAL_REVIEW_NEEDED}".
 
 3.  "status":
-    *   **Goal**: Determine the current status of the application based on the content of THIS email.
-    *   **Strictly Adhere to List**: You MUST choose a status ONLY from the following exact list. Do not invent new statuses or use variations:
-        *   "${DEFAULT_STATUS}" (Maps to: Application submitted, application sent, successfully applied, application received - first confirmation)
-        *   "${REJECTED_STATUS}" (Maps to: Not moving forward, unfortunately, decided not to proceed, position filled by other candidates, regret to inform)
-        *   "${OFFER_STATUS}" (Maps to: Offer of employment, pleased to offer, job offer)
-        *   "${INTERVIEW_STATUS}" (Maps to: Invitation to interview, schedule an interview, interview request, like to speak with you)
-        *   "${ASSESSMENT_STATUS}" (Maps to: Online assessment, coding challenge, technical test, skills test, take-home assignment)
-        *   "${APPLICATION_VIEWED_STATUS}" (Maps to: Application was viewed by recruiter/company, your profile was viewed for the role)
-        *   "Update/Other" (Maps to: General updates like "still reviewing applications," "we're delayed," "thanks for your patience," status is mentioned but unclear which of the above it fits best.)
-    *   **Exclusion**: "${ACCEPTED_STATUS}" is typically set manually by the user after they accept an offer; do not use it.
-    *   **Last Resort**: If the email is clearly job-application-related for the recipient, but the status is absolutely ambiguous and doesn't fit "Update/Other" (very rare), then as a final fallback, use "${MANUAL_REVIEW_NEEDED}" for the status.
+    *   Determine the current status of the application based on the content of THIS email.
+    *   You MUST choose a status ONLY from the following exact list. Do not invent new statuses.
+        *   "${DEFAULT_STATUS}" (Use for: Application submitted, application sent, successfully applied, application received)
+        *   "${REJECTED_STATUS}" (Use for: Not moving forward, unfortunately, decided not to proceed, position filled)
+        *   "${OFFER_STATUS}" (Use for: Offer of employment, pleased to offer, job offer)
+        *   "${INTERVIEW_STATUS}" (Use for: Invitation to interview, schedule an interview, interview request)
+        *   "${ASSESSMENT_STATUS}" (Use for: Online assessment, coding challenge, technical test, skills test)
+        *   "${APPLICATION_VIEWED_STATUS}" (Use for: Application was viewed by recruiter, your profile was viewed for the role)
+        *   "Update/Other" (Use for: General updates or if the status is unclear)
 
 **Output Requirements**:
 *   **ONLY JSON**: Your entire response must be a single, valid JSON object.
-*   **NO Extra Text**: No explanations, greetings, apologies, summaries, or markdown formatting (like \`\`\`json\`\`\`).
 *   **Structure**: {"company_name": "...", "job_title": "...", "status": "..."}
-*   **Placeholder Usage**: Adhere strictly to using "${MANUAL_REVIEW_NEEDED}" when information is absent or criteria are not met, as instructed for each field.
+*   **Irrelevant Emails**: If the email is clearly NOT a job application update (e.g., a newsletter, a job alert), your output MUST be: {"company_name": "${MANUAL_REVIEW_NEEDED}","job_title": "${MANUAL_REVIEW_NEEDED}","status": "Not an Application"}
 
---- EXAMPLES START ---
-Example 1 (LinkedIn "Application Sent To Company - Title Clearly Stated"):
-Subject: Francis, your application was sent to MycoWorks
-Body: LinkedIn. Your application was sent to MycoWorks. MycoWorks - Emeryville, CA (On-Site). Data Architect/Analyst. Applied on May 16, 2025.
-Output:
-{"company_name": "MycoWorks","job_title": "Data Architect/Analyst","status": "${DEFAULT_STATUS}"}
-
-Example 2 (Indeed "Application Submitted", title present):
-Subject: Indeed Application: Senior Software Engineer
-Body: indeed. Application submitted. Senior Software Engineer. Innovatech Solutions - Anytown, USA. The following items were sent to Innovatech Solutions.
-Output:
-{"company_name": "Innovatech Solutions","job_title": "Senior Software Engineer","status": "${DEFAULT_STATUS}"}
-
-Example 3 (Rejection from ATS, title might be in subject, but not confirmed in this email body):
-Subject: Update on your application for Product Manager at MegaEnterprises
-Body: From: no-reply@greenhouse.io. Dear Applicant, Thank you for your interest in MegaEnterprises. After careful consideration, we have decided to move forward with other candidates for this position.
-Output:
-{"company_name": "MegaEnterprises","job_title": "Product Manager","status": "${REJECTED_STATUS}"} 
-(Self-correction: Title "Product Manager" taken from subject if directly linked to "your application". If subject was generic like "Application Update", job_title would be ${MANUAL_REVIEW_NEEDED})
-
-Example 4 (Interview Invitation via ATS, title present):
-Subject: Invitation to Interview: Data Analyst at Beta Innovations (via Lever)
-Body: We were impressed with your application for the Data Analyst role and would like to invite you to an interview...
-Output:
-{"company_name": "Beta Innovations","job_title": "Data Analyst","status": "${INTERVIEW_STATUS}"}
-
-Example 5 (ATS Email - Application Received, NO specific title in THIS email body):
-Subject: Thank you for applying to Handshake!
-Body: no-reply@greenhouse.io. Hi Francis, Thank you for your interest in Handshake! We have received your application and will be reviewing your background shortly... Handshake Recruiting.
-Output:
-{"company_name": "Handshake","job_title": "${MANUAL_REVIEW_NEEDED}","status": "${DEFAULT_STATUS}"}
-
-Example 6 (Unrelated Marketing):
-Subject: Join our webinar on Future Tech!
-Body: Hi User, Don't miss out on our exclusive webinar...
-Output:
-{"company_name": "${MANUAL_REVIEW_NEEDED}","job_title": "${MANUAL_REVIEW_NEEDED}","status": "${MANUAL_REVIEW_NEEDED}"}
-
-Example 7 (LinkedIn "Application Viewed By..." - Title Clearly Stated):
-Subject: Your application was viewed by Gotham Technology Group
-Body: LinkedIn. Great job getting noticed by the hiring team at Gotham Technology Group. Gotham Technology Group - New York, United States. Business Analyst/Product Manager. Applied on May 14.
-Output:
-{"company_name": "Gotham Technology Group","job_title": "Business Analyst/Product Manager","status": "${APPLICATION_VIEWED_STATUS}"}
-
-Example 8 (Wellfound "Application Submitted" - Often has title):
-Subject: Application to LILT successfully submitted
-Body: wellfound. Your application to LILT for the position of Lead Product Manager has been submitted! View your application. LILT.
-Output:
-{"company_name": "LILT","job_title": "Lead Product Manager","status": "${DEFAULT_STATUS}"}
-
-Example 9 (Email indicating general interest/no specific role or company clear):
-Subject: An interesting opportunity
-Body: Hi Francis, Your profile on LinkedIn matches an opening we have. Would you be open to a quick chat? Regards, Recruiter.
-Output:
-{"company_name": "${MANUAL_REVIEW_NEEDED}","job_title": "${MANUAL_REVIEW_NEEDED}","status": "Update/Other"}
---- EXAMPLES END ---
-
---- START OF EMAIL TO PROCESS ---
+--- EMAIL TO PROCESS START ---
 Subject: ${emailSubject}
 Body:
 ${bodySnippet}
---- END OF EMAIL TO PROCESS ---
-Output JSON:
-`; // End of prompt template literal
+--- EMAIL TO PROCESS END ---
+
+JSON Output:
+`;
+// --- END: Replacement for the prompt in callGemini_forApplicationDetails ---
 
   const payload = {
     "contents": [{"parts": [{"text": prompt}]}],

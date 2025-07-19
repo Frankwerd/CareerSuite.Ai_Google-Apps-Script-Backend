@@ -181,6 +181,7 @@ function _processingEngine(config, ss, scriptProperties) {
         return;
     }
 
+    Logger.log(`[ENGINE] Fetching Gmail label: ${config.gmailLabelToProcess}`);
     const procLbl = GmailApp.getUserLabelByName(config.gmailLabelToProcess);
     const processedLblObj = GmailApp.getUserLabelByName(config.gmailLabelProcessed);
     const manualLblObj = config.gmailLabelManualReview ? GmailApp.getUserLabelByName(config.gmailLabelManualReview) : processedLblObj;
@@ -213,15 +214,23 @@ function _processingEngine(config, ss, scriptProperties) {
         }
     }
     
-    const threadsToProcess = procLbl.getThreads(0, 20);
+    Logger.log(`[ENGINE] Fetching threads...`);
+    const batchSize = config.gmailBatchSize || 20;
+    const threadsToProcess = procLbl.getThreads(0, batchSize);
+    Logger.log(`[ENGINE] Found ${threadsToProcess.length} threads.`);
     if (threadsToProcess.length === 0) {
         Logger.log(`[${FUNC_NAME} INFO] No new messages to process for ${config.moduleName}.`);
         return;
     }
 
+    Logger.log(`[ENGINE] Flattening messages from threads...`);
     const messagesToSort = threadsToProcess.flatMap(thread => thread.getMessages());
+    Logger.log(`[ENGINE] Found ${messagesToSort.length} total messages.`);
+
+    Logger.log(`[ENGINE] Sorting messages...`);
     messagesToSort.sort((a, b) => a.getDate() - b.getDate());
 
+    Logger.log(`[ENGINE] Entering main processing loop...`);
     const dataToUpdate = [];
     const newRowsData = [];
     let threadProcessingOutcomes = {};
@@ -250,22 +259,24 @@ function _processingEngine(config, ss, scriptProperties) {
                     existingEntry.peakStatus = handlerResult.updateInfo.newPeakStatus;
                     Logger.log(`[ENGINE] Live cache UPDATED for row ${existingEntry.row}. New Status: ${existingEntry.status}`);
                 }
-            } else if (handlerResult.newRowData) {
-                newRowsData.push(handlerResult.newRowData);
-                const companyKey = (handlerResult.newRowData[COMPANY_COL - 1] || '').toLowerCase();
-                if (companyKey) {
-                    const newCacheEntry = {
-                        row: -1,
-                        emailId: handlerResult.newRowData[EMAIL_ID_COL - 1],
-                        company: handlerResult.newRowData[COMPANY_COL - 1],
-                        title: handlerResult.newRowData[JOB_TITLE_COL - 1],
-                        status: handlerResult.newRowData[STATUS_COL - 1],
-                        peakStatus: handlerResult.newRowData[PEAK_STATUS_COL - 1]
-                    };
-                    if (!companyIndex.has(companyKey)) companyIndex.set(companyKey, []);
-                    companyIndex.get(companyKey).push(newCacheEntry);
-                    Logger.log(`[ENGINE] Live cache CREATED for new entry: ${companyKey}`);
-                }
+            } else if (handlerResult.newRowData && handlerResult.newRowData.length > 0) {
+                newRowsData.push(...handlerResult.newRowData);
+                handlerResult.newRowData.forEach(newRow => {
+                    const companyKey = (newRow[COMPANY_COL - 1] || '').toLowerCase();
+                    if (companyKey) {
+                        const newCacheEntry = {
+                            row: -1,
+                            emailId: newRow[EMAIL_ID_COL - 1],
+                            company: newRow[COMPANY_COL - 1],
+                            title: newRow[JOB_TITLE_COL - 1],
+                            status: newRow[STATUS_COL - 1],
+                            peakStatus: newRow[PEAK_STATUS_COL - 1]
+                        };
+                        if (!companyIndex.has(companyKey)) companyIndex.set(companyKey, []);
+                        companyIndex.get(companyKey).push(newCacheEntry);
+                        Logger.log(`[ENGINE] Live cache CREATED for new entry: ${companyKey}`);
+                    }
+                });
             }
             
             threadProcessingOutcomes[threadId] = handlerResult.requiresManualReview ? 'manual' : 'done';

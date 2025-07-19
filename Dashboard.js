@@ -242,23 +242,23 @@ function setupHelperSheetFormulas(helperSheet) {
     Logger.log(`[${FUNC_NAME} INFO] Weekly applications formulas set in Helper (D2, E2 using intermediate J:K).`);
 
     // --- 3. Data for Application Funnel (Peak Stages) Chart (Helper Columns G:H) ---
-    helperSheet.getRange("G1").setValue("Stage");
+    helperSheet.getRange("G1").setValue("Stage"); 
     helperSheet.getRange("H1").setValue("Count");
     const funnelStagesValues = [DEFAULT_STATUS, APPLICATION_VIEWED_STATUS, ASSESSMENT_STATUS, INTERVIEW_STATUS, OFFER_STATUS]; // From Config.gs
-
+    
     // Write stage names to column G
     helperSheet.getRange(2, 7, funnelStagesValues.length, 1).setValues(funnelStagesValues.map(stage => [stage]));
-
+    
     // Set formulas for counts in column H
     // First stage (e.g., "Applied") often represents total applications. Your old logic had this for H2:
-    helperSheet.getRange("H2").setFormula(`=IFERROR(COUNTA(${appSheetNameForFormula}${companyColLetter}2:${companyColLetter}),0)`);
+    helperSheet.getRange("H2").setFormula(`=IFERROR(COUNTA(${appSheetNameForFormula}${companyColLetter}2:${companyColLetter}),0)`); 
     // For subsequent stages, count based on Peak Status matching the stage in column G
     for (let i = 1; i < funnelStagesValues.length; i++) { // Starts from the second stage in your array
       // Example: For row 3 (second stage), formula in H3 refers to G3
       helperSheet.getRange(i + 2, 8).setFormula(`=IFERROR(COUNTIF(${appSheetNameForFormula}${peakStatusColLetter}2:${peakStatusColLetter}, G${i + 2}),0)`);
     }
     Logger.log(`[${FUNC_NAME} INFO] Funnel stage formulas set in Helper G:H.`);
-
+    
     SpreadsheetApp.flush(); // Ensure formulas calculate initially
     return true;
   } catch (e) {

@@ -1,3 +1,4 @@
+
 /**
  * @file Contains utility functions for Google Sheets interaction,
  * including sheet creation, formatting, and data access setup.
@@ -201,4 +202,50 @@ function getOrCreateSpreadsheetAndSheet() {
   }
   if (!ss) { Logger.log(`[${FUNC_NAME} FATAL] Spreadsheet object is null.`); }
   return { spreadsheet: ss };
+}
+
+/**
+ * Writes a formatted error row to a specified sheet.
+ * This function centralizes error logging to the spreadsheet, providing a consistent format.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet object to write the error to.
+ * @param {object} errorInfo An object containing error details.
+ * @param {string} errorInfo.moduleName The name of the module where the error occurred (e.g., "Application Tracker").
+ * @param {string} errorInfo.errorType The type of error (e.g., "Gemini API Error").
+ * @param {string} errorInfo.details Specific details about the error.
+ * @param {string} errorInfo.messageSubject The subject of the email being processed.
+ * @param {string} errorInfo.messageId The ID of the email message.
+ */
+function _writeErrorToSheet(sheet, errorInfo) {
+    const FUNC_NAME = "_writeErrorToSheet";
+    try {
+        let errorRow = [];
+        // Use the moduleName to determine which sheet's headers to use for formatting
+        if (errorInfo.moduleName === "Application Tracker") {
+            errorRow = new Array(APP_TRACKER_SHEET_HEADERS.length).fill("");
+            errorRow[PROCESSED_TIMESTAMP_COL - 1] = new Date();
+            errorRow[COMPANY_COL - 1] = `ERROR: ${errorInfo.errorType}`;
+            errorRow[JOB_TITLE_COL - 1] = "See Notes";
+            errorRow[STATUS_COL - 1] = MANUAL_REVIEW_NEEDED;
+            errorRow[NOTES_COL - 1] = String(errorInfo.details).substring(0, 500);
+            errorRow[EMAIL_SUBJECT_COL - 1] = errorInfo.messageSubject;
+            errorRow[EMAIL_ID_COL - 1] = errorInfo.messageId;
+        } else if (errorInfo.moduleName === "Job Leads Tracker") {
+            errorRow = new Array(LEADS_SHEET_HEADERS.length).fill("");
+            errorRow[LEADS_DATE_ADDED_COL - 1] = new Date();
+            errorRow[LEADS_COMPANY_COL - 1] = `ERROR: ${errorInfo.errorType}`;
+            errorRow[LEADS_JOB_TITLE_COL - 1] = "See Notes";
+            errorRow[LEADS_STATUS_COL - 1] = "Error";
+            errorRow[LEADS_NOTES_COL - 1] = String(errorInfo.details).substring(0, 500);
+            errorRow[LEADS_EMAIL_SUBJECT_COL - 1] = errorInfo.messageSubject;
+            errorRow[LEADS_EMAIL_ID_COL - 1] = errorInfo.messageId;
+        } else {
+            Logger.log(`[${FUNC_NAME}] WARN: Unknown moduleName "${errorInfo.moduleName}". Cannot format error row.`);
+            return;
+        }
+        sheet.appendRow(errorRow);
+        Logger.log(`[${FUNC_NAME}] Successfully wrote error entry to sheet for module: ${errorInfo.moduleName}.`);
+    } catch (e) {
+        Logger.log(`[${FUNC_NAME}] CRITICAL ERROR: Failed to write an error entry to the sheet. Error: ${e.message}`);
+    }
 }

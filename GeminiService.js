@@ -223,6 +223,7 @@ JSON Array Output:`; // Max characters for body increased slightly
 
     while (attempt < maxAttempts) {
         attempt++;
+        Logger.log(`[GEMINI_LEADS] Starting attempt ${attempt}/${maxAttempts}...`);
         try {
             const response = UrlFetchApp.fetch(API_ENDPOINT, options);
             const responseCode = response.getResponseCode(); 
@@ -240,7 +241,7 @@ JSON Array Output:`; // Max characters for body increased slightly
                     return { success: false, data: null, error: `Parse API JSON (200 OK): ${jsonParseError}. Response: ${responseBody.substring(0,500)}` };
                 }
             } else if (responseCode === 429 && attempt < maxAttempts) { // Rate limit
-                Logger.log(`[GEMINI_LEADS API WARN ${responseCode}] Rate limit (attempt ${attempt}/${maxAttempts}). Waiting 3-5s...`);
+                Logger.log(`[GEMINI_LEADS] API returned 429. Sleeping before retry...`);
                 Utilities.sleep(3000 + Math.random() * 2000); 
                 continue;
             } else { // Other HTTP errors
@@ -252,8 +253,12 @@ JSON Array Output:`; // Max characters for body increased slightly
                 return { success: false, data: null, error: `API Error ${responseCode}: ${responseBody.substring(0,500)}` };
             }
         } catch (e) { // Catch UrlFetchApp.fetch exceptions
-            Logger.log(`[GEMINI_LEADS API CATCH (Attempt ${attempt}/${maxAttempts})] Fetch Error: ${e.toString()}`);
-            if (attempt < maxAttempts) { Utilities.sleep(2000 + Math.random()*1000); continue; }
+            Logger.log(`[GEMINI_LEADS] Caught exception on attempt ${attempt}: ${e.message}.`);
+            if (attempt < maxAttempts) {
+                Logger.log(`[GEMINI_LEADS] Sleeping before retry...`);
+                Utilities.sleep(2000 + Math.random()*1000);
+                continue;
+            }
             return { success: false, data: null, error: `Fetch Error after ${maxAttempts} attempts: ${e.toString()}` };
         }
     }

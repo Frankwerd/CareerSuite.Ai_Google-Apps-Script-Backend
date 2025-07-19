@@ -40,51 +40,57 @@ function _leadsParser(subject, body, key) {
     return callGemini_forJobLeads(body, key);
 }
 
+// --- START: Replacement for _leadsDataHandler in Leads_Main.js ---
 function _leadsDataHandler(geminiResult, message, companyIndex, dataSheet) {
-    const allTheNewRows = [];
-    const requiresManualReview = false; // Not really applicable for leads
+    const newRows = [];
+    let requiresManualReview = false; // Generally false for leads, as we just log what we find.
 
     if (geminiResult && geminiResult.success) {
         const extractedJobsArray = parseGeminiResponse_forJobLeads(geminiResult.data);
         if (extractedJobsArray && extractedJobsArray.length > 0) {
             Logger.log(`[_leadsDataHandler INFO] Gemini extracted ${extractedJobsArray.length} job(s) from msg ${message.getId()}.`);
+
             for (const jobData of extractedJobsArray) {
-                if (jobData && jobData.jobTitle && String(jobData.jobTitle).toLowerCase() !== 'n/a' && String(jobData.jobTitle).toLowerCase() !== 'error') {
-                    const rowDataForSheet = new Array(TOTAL_COLUMNS_IN_LEADS_SHEET).fill("");
-                    rowDataForSheet[LEADS_DATE_ADDED_COL - 1] = message.getDate();
-                    rowDataForSheet[LEADS_COMPANY_COL - 1] = jobData.company || "N/A";
-                    rowDataForSheet[LEADS_JOB_TITLE_COL - 1] = jobData.jobTitle || "N/A";
-                    rowDataForSheet[LEADS_LOCATION_COL - 1] = jobData.location || "N/A";
-                    rowDataForSheet[LEADS_SALARY_PAY_COL - 1] = jobData.salaryPay || "N/A";
-                    rowDataForSheet[LEADS_SOURCE_LINK_COL - 1] = jobData.jobUrl || "N/A";
-                    rowDataForSheet[LEADS_NOTES_COL - 1] = jobData.notes || "";
-                    rowDataForSheet[LEADS_STATUS_COL - 1] = DEFAULT_LEAD_STATUS;
-                    rowDataForSheet[LEADS_FOLLOW_UP_COL - 1] = "";
-                    rowDataForSheet[LEADS_EMAIL_SUBJECT_COL - 1] = message.getSubject().substring(0, 500);
-                    rowDataForSheet[LEADS_EMAIL_ID_COL - 1] = message.getId();
-                    rowDataForSheet[LEADS_PROCESSED_TIMESTAMP_COL - 1] = new Date();
-                    allTheNewRows.push(rowDataForSheet);
-                } else {
-                    if (DEBUG_MODE) Logger.log(`[_leadsDataHandler DEBUG] Job from msg ${message.getId()} was N/A/error or missing title. Skipping sheet write: ${JSON.stringify(jobData)}`);
+                if (jobData && jobData.jobTitle && String(jobData.jobTitle).toLowerCase() !== 'n/a') {
+                    // Create a new row array, ensuring it has the correct number of columns.
+                    const newRowData = new Array(LEADS_SHEET_HEADERS.length).fill("");
+
+                    // ** This is the critical logic that correctly maps the data **
+                    newRowData[LEADS_DATE_ADDED_COL - 1] = message.getDate();
+                    newRowData[LEADS_COMPANY_COL - 1] = jobData.company || "N/A";
+                    newRowData[LEADS_JOB_TITLE_COL - 1] = jobData.jobTitle || "N/A";
+                    newRowData[LEADS_LOCATION_COL - 1] = jobData.location || "N/A";
+                    // Note: LEADS_SALARY_PAY_COL is intentionally skipped as we don't extract it yet.
+                    newRowData[LEADS_SOURCE_LINK_COL - 1] = jobData.jobUrl || "N/A";
+                    newRowData[LEADS_NOTES_COL - 1] = jobData.notes || "";
+                    newRowData[LEADS_STATUS_COL - 1] = DEFAULT_LEAD_STATUS;
+                    // Note: LEADS_FOLLOW_UP_COL is intentionally skipped for the user to fill in.
+                    newRowData[LEADS_EMAIL_SUBJECT_COL - 1] = message.getSubject().substring(0, 500);
+                    newRowData[LEADS_EMAIL_ID_COL - 1] = message.getId();
+                    newRowData[LEADS_PROCESSED_TIMESTAMP_COL - 1] = new Date();
+
+                    newRows.push(newRowData);
                 }
             }
         } else {
-            Logger.log(`[_leadsDataHandler INFO] Msg ${message.getId()}: Gemini API call success, but parsing response yielded no distinct job listings.`);
+            Logger.log(`[_leadsDataHandler INFO] Msg ${message.getId()}: Gemini call was successful but no job listings were parsed.`);
         }
     } else {
         const errorInfo = {
             moduleName: "Job Leads Tracker",
             errorType: "Gemini API Error",
-            details: geminiResult.error || "Unknown API error",
+            details: geminiResult ? String(geminiResult.error) : "Unknown API response error",
             messageSubject: message.getSubject(),
             messageId: message.getId()
         };
         _writeErrorToSheet(dataSheet, errorInfo);
-        Logger.log(`[_leadsDataHandler ERROR] Gemini API FAILED for msg ${message.getId()}. Error: ${geminiResult ? geminiResult.error : 'Null or unexpected API response object'}`);
+        requiresManualReview = true; // Mark for review if the API call itself fails.
     }
 
-    return { newRowData: allTheNewRows, requiresManualReview };
+    // Return the structured object that the _processingEngine expects.
+    return { newRowData: newRows, requiresManualReview: requiresManualReview };
 }
+// --- END: Replacement for _leadsDataHandler in Leads_Main.js ---
 
 function processJobLeads() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();

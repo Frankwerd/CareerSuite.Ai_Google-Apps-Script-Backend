@@ -1,7 +1,7 @@
 /**
  * @file Main script file orchestrating setup, email processing, and UI for the job application tracker.
  * @author Francis John LiButti (Originals), AI Integration & Refinements by Assistant
- * @version 8
+ * @version 9 (Stable)
  */
 
 /**
@@ -108,6 +108,8 @@ function runFullProjectInitialSetup(passedSpreadsheet) {
             });
             const helperSheet = activeSS.getSheetByName(HELPER_SHEET_NAME);
             if (helperSheet && !helperSheet.isSheetHidden()) helperSheet.hideSheet();
+            const jobDataSheet = activeSS.getSheetByName(JOB_DATA_SHEET_NAME);
+            if (jobDataSheet && !jobDataSheet.isSheetHidden()) jobDataSheet.hideSheet();
             setupMessages.push("Branding: Tab order & helper visibility verified.");
         } catch (e) {
             Logger.log(`[${FUNC_NAME} WARN] Error finalizing tab order: ${e.message}`);
@@ -172,22 +174,22 @@ function _processingEngine(config, ss, scriptProperties) {
         Logger.log(`[${FUNC_NAME} HALTING] Gemini API Key is not configured or invalid for ${config.moduleName}. Please set it via the menu.`);
         return;
     }
-
+    
     const dataSheet = ss.getSheetByName(config.sheetTabName);
     if (!dataSheet) {
         Logger.log(`[${FUNC_NAME} FATAL ERROR] Sheet "${config.sheetTabName}" not found. Aborting.`);
         return;
     }
 
-    let procLbl = GmailApp.getUserLabelByName(config.gmailLabelToProcess);
-    let processedLblObj = GmailApp.getUserLabelByName(config.gmailLabelProcessed);
-    let manualLblObj = config.gmailLabelManualReview ? GmailApp.getUserLabelByName(config.gmailLabelManualReview) : processedLblObj;
+    const procLbl = GmailApp.getUserLabelByName(config.gmailLabelToProcess);
+    const processedLblObj = GmailApp.getUserLabelByName(config.gmailLabelProcessed);
+    const manualLblObj = config.gmailLabelManualReview ? GmailApp.getUserLabelByName(config.gmailLabelManualReview) : processedLblObj;
 
     if (!procLbl || !processedLblObj || !manualLblObj) {
         Logger.log(`[${FUNC_NAME} FATAL ERROR] Core Gmail labels for ${config.moduleName} not found. Aborting.`);
         return;
     }
-
+    
     const allSheetData = dataSheet.getDataRange().getValues();
     const companyIndex = new Map();
     for (let i = 1; i < allSheetData.length; i++) {
@@ -198,16 +200,19 @@ function _processingEngine(config, ss, scriptProperties) {
             if (!companyIndex.has(companyKey)) {
                 companyIndex.set(companyKey, []);
             }
-            companyIndex.get(companyKey).push({
+            const cacheEntry = {
                 row: i + 1,
                 rowData: rowData,
-                title: rowData[JOB_TITLE_COL-1],
-                status: rowData[STATUS_COL-1],
-                peakStatus: rowData[PEAK_STATUS_COL-1]
-            });
+                emailId: rowData[EMAIL_ID_COL - 1],
+                company: companyName,
+                title: rowData[JOB_TITLE_COL - 1],
+                status: rowData[STATUS_COL - 1],
+                peakStatus: rowData[PEAK_STATUS_COL - 1]
+            };
+            companyIndex.get(companyKey).push(cacheEntry);
         }
     }
-
+    
     const threadsToProcess = procLbl.getThreads(0, 20);
     if (threadsToProcess.length === 0) {
         Logger.log(`[${FUNC_NAME} INFO] No new messages to process for ${config.moduleName}.`);
@@ -231,39 +236,62 @@ function _processingEngine(config, ss, scriptProperties) {
         const threadId = message.getThread().getId();
         const emailSubject = message.getSubject();
         const plainBodyText = message.getPlainBody();
-
-        const geminiResult = config.parserFunction(emailSubject, plainBodyText, geminiApiKey);
-        const handlerResult = config.dataHandler(geminiResult, message, companyIndex, dataSheet);
-
-        if (handlerResult.updateInfo) {
-            dataToUpdate.push(handlerResult.updateInfo);
-            const companyKey = (handlerResult.updateInfo.company || '').toLowerCase();
-            const existingEntry = companyIndex.get(companyKey)?.find(e => e.row === handlerResult.updateInfo.row);
-            if (existingEntry) {
-                existingEntry.status = handlerResult.updateInfo.newStatus;
-                existingEntry.peakStatus = handlerResult.updateInfo.newPeakStatus;
+        
+        try {
+            const geminiResult = config.parserFunction(emailSubject, plainBodyText, geminiApiKey);
+            const handlerResult = config.dataHandler(geminiResult, message, companyIndex, dataSheet);
+            
+            if (handlerResult.updateInfo) {
+                dataToUpdate.push(handlerResult.updateInfo);
+                const companyKey = (handlerResult.updateInfo.company || '').toLowerCase();
+                const existingEntry = companyIndex.get(companyKey)?.find(e => e.row === handlerResult.updateInfo.row);
+                if (existingEntry) {
+                    existingEntry.status = handlerResult.updateInfo.newStatus;
+                    existingEntry.peakStatus = handlerResult.updateInfo.newPeakStatus;
+                    Logger.log(`[ENGINE] Live cache UPDATED for row ${existingEntry.row}. New Status: ${existingEntry.status}`);
+                }
+            } else if (handlerResult.newRowData) {
+                newRowsData.push(handlerResult.newRowData);
+                const companyKey = (handlerResult.newRowData[COMPANY_COL - 1] || '').toLowerCase();
+                if (companyKey) {
+                    const newCacheEntry = {
+                        row: -1,
+                        emailId: handlerResult.newRowData[EMAIL_ID_COL - 1],
+                        company: handlerResult.newRowData[COMPANY_COL - 1],
+                        title: handlerResult.newRowData[JOB_TITLE_COL - 1],
+                        status: handlerResult.newRowData[STATUS_COL - 1],
+                        peakStatus: handlerResult.newRowData[PEAK_STATUS_COL - 1]
+                    };
+                    if (!companyIndex.has(companyKey)) companyIndex.set(companyKey, []);
+                    companyIndex.get(companyKey).push(newCacheEntry);
+                    Logger.log(`[ENGINE] Live cache CREATED for new entry: ${companyKey}`);
+                }
             }
-        } else if (handlerResult.newRowData) {
-            newRowsData.push(handlerResult.newRowData);
-            const companyKey = (handlerResult.newRowData[COMPANY_COL - 1] || '').toLowerCase();
-            if (companyKey) {
-                if (!companyIndex.has(companyKey)) companyIndex.set(companyKey, []);
-                companyIndex.get(companyKey).push({ row: -1, emailId: msgId, /* other fields */ });
-            }
+            
+            threadProcessingOutcomes[threadId] = handlerResult.requiresManualReview ? 'manual' : 'done';
+            
+        } catch (e) {
+            Logger.log(`[${FUNC_NAME} FATAL ERROR] in message loop for msgId ${msgId}: ${e.message}\n${e.stack}`);
+            threadProcessingOutcomes[threadId] = 'manual';
         }
-
-        threadProcessingOutcomes[threadId] = handlerResult.requiresManualReview ? 'manual' : 'done';
+        
         Utilities.sleep(200);
     }
-
+    
     dataToUpdate.forEach(update => dataSheet.getRange(update.row, 1, 1, update.values.length).setValues([update.values]));
+
     if (newRowsData.length > 0) {
         const firstNewRow = dataSheet.getLastRow() + 1;
         dataSheet.getRange(firstNewRow, 1, newRowsData.length, newRowsData[0].length).setValues(newRowsData);
+        Logger.log(`[ENGINE INFO] Batch appended ${newRowsData.length} new rows.`);
         newRowsData.forEach((rowData, i) => {
             const companyKey = (rowData[COMPANY_COL - 1] || '').toLowerCase();
-            const entryInCache = companyIndex.get(companyKey)?.find(e => e.row === -1 && e.emailId === rowData[EMAIL_ID_COL - 1]);
-            if (entryInCache) entryInCache.row = firstNewRow + i;
+            const emailId = rowData[EMAIL_ID_COL - 1];
+            const entryInCache = companyIndex.get(companyKey)?.find(e => e.row === -1 && e.emailId === emailId);
+            if (entryInCache) {
+                entryInCache.row = firstNewRow + i;
+                Logger.log(`[ENGINE] Finalizing live cache row number for ${companyKey} to ${entryInCache.row}`);
+            }
         });
     }
 
@@ -323,7 +351,7 @@ function _trackerDataHandler(geminiResult, message, companyIndex, dataSheet) {
         const errorInfo = {
             moduleName: "Application Tracker",
             errorType: "Gemini API Error",
-            details: geminiResult ? geminiResult.error : "Unknown API response error",
+            details: geminiResult ? String(geminiResult.error) : "Unknown API response error",
             messageSubject: message.getSubject(),
             messageId: msgId
         };
@@ -345,7 +373,7 @@ function _trackerDataHandler(geminiResult, message, companyIndex, dataSheet) {
             existingRowInfoToUpdate = potentialMatches.find(e => e.title && e.title.toLowerCase() === jobTitle.toLowerCase());
         }
         if (!existingRowInfoToUpdate && potentialMatches.length > 0) {
-            existingRowInfoToUpdate = potentialMatches.reduce((latest, current) => (current.row > latest.row ? current : latest), {row: -1});
+            existingRowInfoToUpdate = potentialMatches.reduce((latest, current) => (current.row > latest.row ? current : latest), { row: -1 });
         }
         if (existingRowInfoToUpdate && existingRowInfoToUpdate.row !== -1) {
             targetSheetRowForUpdate = existingRowInfoToUpdate.row;
@@ -398,7 +426,7 @@ function _trackerDataHandler(geminiResult, message, companyIndex, dataSheet) {
         rowDataForSheet[EMAIL_SUBJECT_COL - 1] = emailSubject;
         rowDataForSheet[EMAIL_LINK_COL - 1] = emailPermaLink;
         rowDataForSheet[EMAIL_ID_COL - 1] = msgId;
-
+        
         return {
             newRowData: rowDataForSheet,
             requiresManualReview: requiresManualReview
@@ -451,9 +479,8 @@ function processJobApplicationEmails(ss, scriptProperties) {
  */
 function markStaleApplicationsAsRejected(ss) {
     const FUNC_NAME = "markStaleApplicationsAsRejected";
-    const SCRIPT_START_TIME = new Date();
-    Logger.log(`\n==== ${FUNC_NAME}: START (${SCRIPT_START_TIME.toLocaleString()}) ====`);
-
+    Logger.log(`\n==== ${FUNC_NAME}: START (${new Date().toLocaleString()}) ====`);
+    
     if (!ss) {
       Logger.log(`[${FUNC_NAME} FATAL ERROR] Main spreadsheet not passed. Aborting.`);
       return;
@@ -476,7 +503,7 @@ function markStaleApplicationsAsRejected(ss) {
     const currentDate = new Date();
     const staleThresholdDate = new Date();
     staleThresholdDate.setDate(currentDate.getDate() - (WEEKS_THRESHOLD * 7));
-
+    
     let updatedApplicationsCount = 0;
     for (let i = 1; i < sheetValues.length; i++) {
         const currentStatus = sheetValues[i][STATUS_COL - 1];
@@ -494,9 +521,6 @@ function markStaleApplicationsAsRejected(ss) {
     } else {
       Logger.log(`[${FUNC_NAME} INFO] No stale applications found needing update.`);
     }
-
-    const SCRIPT_END_TIME = new Date();
-    Logger.log(`==== ${FUNC_NAME}: END (${SCRIPT_END_TIME.toLocaleString()}) ==== Time: ${(SCRIPT_END_TIME.getTime() - SCRIPT_START_TIME.getTime()) / 1000}s ====`);
 }
 
 /**
@@ -531,16 +555,16 @@ function userDrivenFullSetup() {
   const ui = SpreadsheetApp.getUi();
   const scriptProperties = PropertiesService.getScriptProperties();
   const activeSS = SpreadsheetApp.getActiveSpreadsheet();
-
+  
   if (typeof TEMPLATE_SHEET_ID !== 'undefined' && activeSS.getId() === TEMPLATE_SHEET_ID) {
       ui.alert('Action Not Allowed on Template', 'This setup function cannot be run on the master template sheet.', ui.ButtonSet.OK);
       return;
   }
 
   ui.alert('Starting Setup', 'The full project setup will now begin. This may take a minute or two.', ui.ButtonSet.OK);
-
+  
   const setupResult = runFullProjectInitialSetup(activeSS);
-
+  
   if (setupResult && setupResult.success) {
       scriptProperties.setProperty('initialSetupDone_vCSAI_1', 'true');
       const aiFeaturesAreActive = activateAiFeatures();
@@ -569,20 +593,78 @@ function uninstall() {
     const triggers = ScriptApp.getProjectTriggers();
     triggers.forEach(trigger => ScriptApp.deleteTrigger(trigger));
     Logger.log(`[${FUNC_NAME}] All triggers removed.`);
-
-    // Additional cleanup for filters if needed, similar to previous versions
-
+    
+    // Additional cleanup for filters if needed
+    
     ui.alert('Uninstall Complete', 'All triggers have been removed.', ui.ButtonSet.OK);
   } else {
     ui.alert('Uninstall Canceled', 'No changes made.', ui.ButtonSet.OK);
   }
-  Logger.log(`\n==== ${FUNC_NAME}: FINISHED ====`);
 }
 
-/**
- * Activates AI features by syncing the API key.
- * @returns {boolean}
- */
 function activateAiFeatures() {
-  // Logic from previous versions
+  const FUNC_NAME = "activateAiFeatures";
+  const ui = SpreadsheetApp.getUi();
+  const scriptProperties = PropertiesService.getScriptProperties();
+
+  try {
+    Logger.log(`[${FUNC_NAME}] Attempting to fetch API key from master Web App.`);
+    if (typeof MASTER_WEB_APP_URL === 'undefined' || MASTER_WEB_APP_URL === 'https://script.google.com/macros/s/YOUR_MASTER_DEPLOYMENT_ID/exec' || MASTER_WEB_APP_URL.trim() === '') {
+      Logger.log(`[${FUNC_NAME} ERROR] MASTER_WEB_APP_URL is not configured in Config.js.`);
+      ui.alert('Configuration Error\n\nThe Master Web App URL is not configured. Please contact support or check script configuration if you are the administrator.');
+      scriptProperties.setProperty('aiFeaturesActive', 'false');
+      return false;
+    }
+
+    const options = {
+      method: 'get',
+      headers: {
+        'Authorization': 'Bearer ' + ScriptApp.getOAuthToken()
+      },
+      muteHttpExceptions: true,
+      contentType: 'application/json'
+    };
+
+    const response = UrlFetchApp.fetch(MASTER_WEB_APP_URL + '?action=getApiKeyForScript', options);
+    const responseCode = response.getResponseCode();
+    const responseBody = response.getContentText();
+
+    if (responseCode === 200) {
+      const data = JSON.parse(responseBody);
+      if (data.success && data.apiKey) {
+        const fetchedApiKey = data.apiKey;
+        if (fetchedApiKey && fetchedApiKey.trim() !== "" && fetchedApiKey.startsWith("AIza") && fetchedApiKey.length > 30) {
+          scriptProperties.setProperty(GEMINI_API_KEY_PROPERTY, fetchedApiKey);
+          scriptProperties.setProperty('aiFeaturesActive', 'true');
+          Logger.log(`[${FUNC_NAME}] API Key successfully fetched, validated, and stored in ScriptProperties. AI features activated.`);
+          ui.alert('AI Features Activated!\n\nYour Gemini API Key has been successfully synced and validated. AI-powered features are now enabled.');
+          return true;
+        } else {
+          Logger.log(`[${FUNC_NAME} WARN] Fetched API Key is invalid or malformed.`);
+          scriptProperties.setProperty('aiFeaturesActive', 'false');
+          scriptProperties.deleteProperty(GEMINI_API_KEY_PROPERTY);
+          ui.alert('API Key Validation Failed\n\nThe API Key retrieved from your settings is invalid. Please update it in the CareerSuite.AI extension and try again.');
+          return false;
+        }
+      } else {
+        Logger.log(`[${FUNC_NAME} WARN] Web App call successful but API key not found or error in response: ${responseBody}`);
+        scriptProperties.setProperty('aiFeaturesActive', 'false');
+        scriptProperties.deleteProperty(GEMINI_API_KEY_PROPERTY);
+        ui.alert('API Key Not Found\n\nCould not retrieve your API Key. Please ensure it is saved correctly in the CareerSuite.AI extension settings, then try this menu option again.');
+        return false;
+      }
+    } else {
+      Logger.log(`[${FUNC_NAME} ERROR] Failed to fetch API Key from Web App. Response Code: ${responseCode}. Body: ${responseBody}`);
+      scriptProperties.setProperty('aiFeaturesActive', 'false');
+      scriptProperties.deleteProperty(GEMINI_API_KEY_PROPERTY);
+      ui.alert(`API Key Sync Failed\n\nCould not connect to the API Key service (Error: ${responseCode}). Please try again later or check extension settings.`);
+      return false;
+    }
+  } catch (error) {
+    Logger.log(`[${FUNC_NAME} ERROR] Critical error during AI feature activation/API key sync: ${error.toString()}\nStack: ${error.stack}`);
+    scriptProperties.setProperty('aiFeaturesActive', 'false');
+    scriptProperties.deleteProperty(GEMINI_API_KEY_PROPERTY);
+    ui.alert(`Error Activating AI\n\nAn unexpected error occurred: ${error.message}. Please check logs.`);
+    return false;
+  }
 }

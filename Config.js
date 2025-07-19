@@ -154,10 +154,12 @@ const TRACKER_GMAIL_FILTER_QUERY_APP_UPDATES = `(subject:("re: your application"
 const LEADS_GMAIL_LABEL_PARENT = `${MASTER_GMAIL_LABEL_PARENT}/Leads`;
 const LEADS_GMAIL_LABEL_TO_PROCESS = `${LEADS_GMAIL_LABEL_PARENT}/To Process`;
 const LEADS_GMAIL_LABEL_PROCESSED = `${LEADS_GMAIL_LABEL_PARENT}/Processed`;
+const LEADS_GMAIL_LABEL_MANUAL_REVIEW = `${LEADS_GMAIL_LABEL_PARENT}/Manual Review`;
 
 // User Property keys for storing Leads label IDs (used by processJobLeads)
 const LEADS_USER_PROPERTY_TO_PROCESS_LABEL_ID = 'leadsToProcessLabelId';
 const LEADS_USER_PROPERTY_PROCESSED_LABEL_ID = 'leadsProcessedLabelId';
+const LEADS_USER_PROPERTY_MANUAL_LABEL_ID = 'leadsManualReviewLabelId';
 
 // Gmail filter query for Job Leads. Example targets common job alert emails.
 // This should be customized by the user for their specific job alert subscriptions.

@@ -56,13 +56,13 @@ graph TD
     end
 
     subgraph User's Google Account
-        B[Google Apps Script Web App<br>(WebApp_Endpoints.js)]
-        C[Google Apps Script Triggers<br>(Triggers.js)]
-        D[Processing Engine<br>(Main.js)]
-        E[Gemini Service<br>(GeminiService.js)]
-        F[User's Google Sheet<br>(The Job Tracker)]
-        G[User's Gmail Account]
-        H[User Properties<br>(Stores API Key)]
+        B["Google Apps Script Web App<br>(WebApp_Endpoints.js)"]
+        C["Google Apps Script Triggers<br>(Triggers.js)"]
+        D["Processing Engine<br>(Main.js)"]
+        E["Gemini Service<br>(GeminiService.js)"]
+        F["User's Google Sheet<br>(The Job Tracker)"]
+        G["User's Gmail Account"]
+        H["User Properties<br>(Stores API Key)"]
     end
 
     subgraph External Services

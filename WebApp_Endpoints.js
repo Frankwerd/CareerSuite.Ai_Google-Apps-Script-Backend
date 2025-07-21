@@ -49,19 +49,16 @@ function doGet(e) {
  * @param {GoogleAppsScript.Events.DoPost} e The event parameter from the POST request.
  * @returns {GoogleAppsScript.Content.TextOutput} A JSON response.
  */
-/**
- * Handles POST requests to the web app.
- * @param {GoogleAppsScript.Events.DoPost} e The event parameter from the POST request.
- * @returns {GoogleAppsScript.Content.TextOutput} A JSON response.
- */
 function doPost(e) {
   const FUNC_NAME = "WebApp_doPost";
   try {
+    // --- User & Action Identification ---
     const userEmail = Session.getEffectiveUser().getEmail();
     Logger.log(`[${FUNC_NAME}] Received POST request from user: ${userEmail}.`);
 
-    const action = e.parameter.action;
+    const action = e && e.parameter ? e.parameter.action : null;
 
+    // === ACTION: setApiKey ===
     if (action === 'setApiKey') {
       Logger.log(`[${FUNC_NAME}] Routing to 'setApiKey' action.`);
       
@@ -70,99 +67,39 @@ function doPost(e) {
 
       if (!apiKey || typeof apiKey !== 'string' || apiKey.length < 35) {
         Logger.log(`[${FUNC_NAME} ERROR] 'setApiKey' failed: Invalid API key provided.`);
-        return createJsonResponse({ status: 'error', message: 'Invalid or missing API key provided.' });
+        return createJsonResponse({
+          status: 'error',
+          message: 'Invalid or missing API key provided in the request.'
+        });
       }
 
-      PropertiesService.getUserProperties().setProperty(GEMINI_API_KEY_PROPERTY, apiKey); // From Config.gs
+      // GEMINI_API_KEY_PROPERTY is the constant from Config.gs
+      PropertiesService.getUserProperties().setProperty(GEMINI_API_KEY_PROPERTY, apiKey);
 
       Logger.log(`[${FUNC_NAME} SUCCESS] Saved Gemini API key to UserProperties for user ${userEmail}.`);
-      return createJsonResponse({ status: 'success', message: 'API key was successfully saved to the backend.' });
+      return createJsonResponse({
+        status: 'success',
+        message: 'API key was successfully saved to the backend.'
+      });
     }
 
+    // Fallback for an unknown POST action.
     Logger.log(`[${FUNC_NAME} WARN] An unknown POST action was requested: "${action}".`);
-    return createJsonResponse({ status: 'error', message: 'Unknown or unsupported POST action.' });
+    return createJsonResponse({
+      status: 'error',
+      message: 'Unknown or unsupported POST action requested.'
+    });
 
   } catch (error) {
+    // Global Error Handling for any unexpected errors.
     Logger.log(`[${FUNC_NAME} CRITICAL ERROR] Error in doPost: ${error.toString()}\nStack: ${error.stack}`);
-    return createJsonResponse({ status: 'error', message: `Server error on POST: ${error.message}` });
+    return createJsonResponse({
+      status: 'error',
+      message: `Failed to complete POST action due to a server-side error: ${error.message}`
+    });
   }
 }
 
-
-/**
- * Handles the logic for getting an existing sheet or creating a new one.
- * This is the primary endpoint for the extension's "Access My Job Tracker" button.
- * @param {GoogleAppsScript.Events.DoGet} e The event parameter from the GET request.
- * @returns {GoogleAppsScript.Content.TextOutput} A JSON response.
- */
-function doGet_getOrCreateSheet(e) {
-  const FUNC_NAME = "doGet_getOrCreateSheet";
-  const userEmail = Session.getEffectiveUser().getEmail();
-  const userProps = PropertiesService.getUserProperties();
-  const existingSheetId = userProps.getProperty('userMjmSheetId');
-  
-  if (existingSheetId) {
-    try {
-      const existingSheet = SpreadsheetApp.openById(existingSheetId);
-      Logger.log(`[${FUNC_NAME}] Found existing, valid sheet for ${userEmail}: ID=${existingSheetId}`);
-      return createJsonResponse({
-        status: "success",
-        message: "Sheet already exists.",
-        sheetId: existingSheetId,
-        sheetUrl: existingSheet.getUrl()
-      });
-    } catch (openErr) {
-      Logger.log(`[${FUNC_NAME}] Stored sheet ID ${existingSheetId} was invalid. Clearing property and creating new. Error: ${openErr.message}`);
-      userProps.deleteProperty('userMjmSheetId');
-    }
-  }
-
-  Logger.log(`[${FUNC_NAME}] No valid sheet found for ${userEmail}. Creating from template...`);
-  const templateId = TEMPLATE_SHEET_ID; // From Config.gs
-  if (!templateId || templateId.length < 20) {
-    return createJsonResponse({ status: 'error', message: 'Server configuration error: Master Template Sheet ID is invalid.' });
-  }
-
-  const templateFile = DriveApp.getFileById(templateId);
-  const newFileName = "CareerSuite.AI Data";
-  const newSheetFile = templateFile.makeCopy(newFileName);
-  const newSheetId = newSheetFile.getId();
-  
-  userProps.setProperty('userMjmSheetId', newSheetId);
-  Logger.log(`[${FUNC_NAME}] New sheet created for ${userEmail}. ID: ${newSheetId}`);
-
-  return createJsonResponse({
-    status: "success",
-    message: "Your new sheet was created! Finalizing setup now...",
-    sheetId: newSheetId,
-    sheetUrl: newSheetFile.getUrl()
-  });
-}
-
-/**
- * Creates a generic HTML response for the OAuth landing page.
- * @returns {GoogleAppsScript.HTML.HtmlOutput} The HTML output for the landing page.
- */
-function createAuthLandingPage() {
-    const htmlOutput = `
-      <!DOCTYPE html><html><head><title>CareerSuite.AI Authorization</title>
-      <style>body { font-family: sans-serif; margin: 20px; background-color: #f0f4f8; color: #333; text-align: center; } .container { background-color: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: inline-block; } h1 { color: #33658A; }</style></head><body><div class="container">
-        <h1>CareerSuite.AI</h1><p>Authorization successful!</p><p>You can now close this tab and return to the extension.</p>
-      </div></body></html>`;
-    return HtmlService.createHtmlOutput(htmlOutput)
-      .setTitle("CareerSuite.AI Authorization")
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-}
-
-/**
- * Creates a standardized JSON response object.
- * @param {object} payload The JSON payload to send.
- * @returns {GoogleAppsScript.Content.TextOutput} The JSON response object.
- */
-function createJsonResponse(payload) {
-  return ContentService.createTextOutput(JSON.stringify(payload))
-    .setMimeType(ContentService.MimeType.JSON);
-}
 
 /**
  * Handles the logic for getting an existing sheet or creating a new one for the user.
@@ -231,6 +168,31 @@ function doGet_getOrCreateSheet(e) {
 }
 
 /**
+ * Creates a generic HTML response for the OAuth landing page.
+ * @returns {GoogleAppsScript.HTML.HtmlOutput} The HTML output for the landing page.
+ */
+function createAuthLandingPage() {
+    const htmlOutput = `
+      <!DOCTYPE html><html><head><title>CareerSuite.AI Authorization</title>
+      <style>body { font-family: sans-serif; margin: 20px; background-color: #f0f4f8; color: #333; text-align: center; } .container { background-color: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: inline-block; } h1 { color: #33658A; }</style></head><body><div class="container">
+        <h1>CareerSuite.AI</h1><p>Authorization successful!</p><p>You can now close this tab and return to the extension.</p>
+      </div></body></html>`;
+    return HtmlService.createHtmlOutput(htmlOutput)
+      .setTitle("CareerSuite.AI Authorization")
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+/**
+ * Creates a standardized JSON response object.
+ * @param {object} payload The JSON payload to send.
+ * @returns {GoogleAppsScript.Content.TextOutput} The JSON response object.
+ */
+function createJsonResponse(payload) {
+  return ContentService.createTextOutput(JSON.stringify(payload))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
  * Handles GET requests for aggregated weekly application data.
  * @param {GoogleAppsScript.Events.DoGet} e The event parameter from the GET request.
  * @returns {GoogleAppsScript.Content.TextOutput} A JSON response.
@@ -258,11 +220,11 @@ function doGet_WeeklyApplicationData(e) {
         });
     }
     
-    const helperSheet = ss.getSheetByName(HELPER_SHEET_NAME);
-    if (!helperSheet) {
+    const jobDataSheet = ss.getSheetByName(JOB_DATA_SHEET_NAME);
+    if (!jobDataSheet) {
       return createJsonResponse({ 
           success: false, 
-          error: `Helper data sheet ("${HELPER_SHEET_NAME}") not found. Please run 'Update Dashboard Metrics' from the tools menu in your sheet.`
+          error: `Job data sheet ("${JOB_DATA_SHEET_NAME}") not found. Please run 'Update Dashboard Metrics' from the tools menu in your sheet.`
       });
     }
 
@@ -301,57 +263,6 @@ function doGet_WeeklyApplicationData(e) {
     return createJsonResponse({ 
         success: false, 
         error: `Error fetching weekly application data: ${error.toString()}`
-    });
-  }
-}
-
-function doPost(e) {
-  const FUNC_NAME = "WebApp_doPost";
-  try {
-    // --- User & Action Identification ---
-    const userEmail = Session.getEffectiveUser().getEmail();
-    Logger.log(`[${FUNC_NAME}] Received POST request from user: ${userEmail}.`);
-
-    const action = e && e.parameter ? e.parameter.action : null;
-
-    // === ACTION: setApiKey ===
-    if (action === 'setApiKey') {
-      Logger.log(`[${FUNC_NAME}] Routing to 'setApiKey' action.`);
-      
-      const postData = JSON.parse(e.postData.contents);
-      const apiKey = postData.apiKey;
-
-      if (!apiKey || typeof apiKey !== 'string' || apiKey.length < 35) {
-        Logger.log(`[${FUNC_NAME} ERROR] 'setApiKey' failed: Invalid API key provided.`);
-        return createJsonResponse({
-          status: 'error',
-          message: 'Invalid or missing API key provided in the request.'
-        });
-      }
-
-      // GEMINI_API_KEY_PROPERTY is the constant from Config.gs
-      PropertiesService.getUserProperties().setProperty(GEMINI_API_KEY_PROPERTY, apiKey);
-
-      Logger.log(`[${FUNC_NAME} SUCCESS] Saved Gemini API key to UserProperties for user ${userEmail}.`);
-      return createJsonResponse({
-        status: 'success',
-        message: 'API key was successfully saved to the backend.'
-      });
-    }
-
-    // Fallback for an unknown POST action.
-    Logger.log(`[${FUNC_NAME} WARN] An unknown POST action was requested: "${action}".`);
-    return createJsonResponse({
-      status: 'error',
-      message: 'Unknown or unsupported POST action requested.'
-    });
-
-  } catch (error) {
-    // Global Error Handling for any unexpected errors.
-    Logger.log(`[${FUNC_NAME} CRITICAL ERROR] Error in doPost: ${error.toString()}\nStack: ${error.stack}`);
-    return createJsonResponse({
-      status: 'error',
-      message: `Failed to complete POST action due to a server-side error: ${error.message}`
     });
   }
 }

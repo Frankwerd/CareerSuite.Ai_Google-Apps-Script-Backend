@@ -106,9 +106,9 @@ function runFullProjectInitialSetup(passedSpreadsheet) {
                 const sheetToMove = activeSS.getSheetByName(sheetName);
                 if (sheetToMove) activeSS.setActiveSheet(sheetToMove).moveActiveSheet(index + 1);
             });
-            const helperSheet = activeSS.getSheetByName(HELPER_SHEET_NAME);
-            if (helperSheet && !helperSheet.isSheetHidden()) helperSheet.hideSheet();
-            setupMessages.push("Branding: Tab order & helper visibility verified.");
+            const jobDataSheet = activeSS.getSheetByName(JOB_DATA_SHEET_NAME);
+            if (jobDataSheet && !jobDataSheet.isSheetHidden()) jobDataSheet.hideSheet();
+            setupMessages.push("Branding: Tab order & job data visibility verified.");
         } catch (e) {
             Logger.log(`[${FUNC_NAME} WARN] Error finalizing tab order: ${e.message}`);
         }

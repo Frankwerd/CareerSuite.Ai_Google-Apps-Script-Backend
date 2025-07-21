@@ -220,15 +220,15 @@ function doGet_WeeklyApplicationData(e) {
         });
     }
     
-    const jobDataSheet = ss.getSheetByName(JOB_DATA_SHEET_NAME);
-    if (!jobDataSheet) {
+    const jobDataSheet = ss.getSheetByName(JOB_DATA_SHEET_NAME); // Use the correct sheet name
+    if (!jobDataSheet) { // Update error message
       return createJsonResponse({ 
           success: false, 
           error: `Job data sheet ("${JOB_DATA_SHEET_NAME}") not found. Please run 'Update Dashboard Metrics' from the tools menu in your sheet.`
       });
     }
 
-    const headersRange = helperSheet.getRange("D1:E1").getDisplayValues();
+    const headersRange = jobDataSheet.getRange("D1:E1").getDisplayValues(); // Read from jobDataSheet
     if (headersRange[0][0] !== "Week Starting" || headersRange[0][1] !== "Applications") {
         return createJsonResponse({ 
             success: false, 
@@ -236,7 +236,7 @@ function doGet_WeeklyApplicationData(e) {
         });
     }
     
-    const lastDataRowInColD = helperSheet.getRange("D1:D").getValues().filter(String).length;
+    const lastDataRowInColD = jobDataSheet.getRange("D1:D").getValues().filter(String).length; // Read from jobDataSheet
     let weeklyData = [];
 
     if (lastDataRowInColD > 1) {
@@ -245,7 +245,7 @@ function doGet_WeeklyApplicationData(e) {
         const numRowsToFetchActual = lastDataRowInColD - startRowForFetch + 1;
         
         if (numRowsToFetchActual > 0) {
-            const rangeDataValues = helperSheet.getRange(startRowForFetch, 4, numRowsToFetchActual, 2).getDisplayValues();
+            const rangeDataValues = jobDataSheet.getRange(startRowForFetch, 4, numRowsToFetchActual, 2).getDisplayValues(); // Read from jobDataSheet
             rangeDataValues.forEach(row => {
                 if (row[0] && row[1]) {
                      weeklyData.push({ weekStarting: row[0], applications: row[1] });

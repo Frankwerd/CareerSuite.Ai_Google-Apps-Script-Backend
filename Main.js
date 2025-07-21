@@ -127,14 +127,27 @@ function runFullProjectInitialSetup(passedSpreadsheet) {
     if (overallSuccess) {
         Logger.log(`[${FUNC_NAME} INFO] Applying final tab order...`);
         try {
-            const tabOrder = [DASHBOARD_TAB_NAME, APP_TRACKER_SHEET_TAB_NAME, LEADS_SHEET_TAB_NAME];
+            const tabOrder = [DASHBOARD_TAB_NAME, APP_TRACKER_SHEET_TAB_NAME, HELPER_SHEET_NAME, LEADS_SHEET_TAB_NAME];
+            const allSheets = activeSS.getSheets();
+            const sheetNames = allSheets.map(sheet => sheet.getName());
+
+            // Move specified tabs to the front
             tabOrder.forEach((sheetName, index) => {
-                const sheetToMove = activeSS.getSheetByName(sheetName);
-                if (sheetToMove) activeSS.setActiveSheet(sheetToMove).moveActiveSheet(index + 1);
+                if (sheetNames.includes(sheetName)) {
+                    const sheetToMove = activeSS.getSheetByName(sheetName);
+                    if (sheetToMove) {
+                        activeSS.setActiveSheet(sheetToMove);
+                        activeSS.moveActiveSheet(index + 1);
+                    }
+                }
             });
-            const jobDataSheet = activeSS.getSheetByName(JOB_DATA_SHEET_NAME);
-            if (jobDataSheet && !jobDataSheet.isSheetHidden()) jobDataSheet.hideSheet();
-            setupMessages.push("Branding: Tab order & job data visibility verified.");
+
+            // Hide the helper sheet
+            const helperSheet = activeSS.getSheetByName(HELPER_SHEET_NAME);
+            if (helperSheet && !helperSheet.isSheetHidden()) {
+                helperSheet.hideSheet();
+            }
+            setupMessages.push("Branding: Tab order & helper data visibility verified.");
         } catch (e) {
             Logger.log(`[${FUNC_NAME} WARN] Error finalizing tab order: ${e.message}`);
         }

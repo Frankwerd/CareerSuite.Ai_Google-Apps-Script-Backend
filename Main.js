@@ -62,16 +62,16 @@ function runFullProjectInitialSetup(passedSpreadsheet) {
 
     PropertiesService.getScriptProperties().setProperty(SPREADSHEET_ID_KEY, activeSS.getId());
 
-    // --- START: RESTORED DASHBOARD & JOB DATA SETUP ---
-    Logger.log(`\n[${FUNC_NAME} INFO] --- Starting Dashboard & Job Data Setup ---`);
+    // --- START: RESTORED DASHBOARD & HELPER DATA SETUP ---
+    Logger.log(`\n[${FUNC_NAME} INFO] --- Starting Dashboard & Helper Data Setup ---`);
     try {
         const dashboardSheet = getOrCreateDashboardSheet(activeSS);
-        const jobDataSheet = getOrCreateJobDataSheet(activeSS);
+        const helperSheet = getOrCreateHelperSheet(activeSS);
 
-        if (dashboardSheet && jobDataSheet) {
+        if (dashboardSheet && helperSheet) {
             formatDashboardSheet(dashboardSheet);
-            setupJobDataSheetFormulas(jobDataSheet);
-            updateDashboardMetrics(dashboardSheet, jobDataSheet);
+            setupHelperSheetFormulas(helperSheet);
+            updateDashboardMetrics(dashboardSheet, helperSheet);
 
             // Add success messages
             const dashboardMsg = `Dashboard Module: Sheet setup and charts configured.`;
@@ -79,14 +79,14 @@ function runFullProjectInitialSetup(passedSpreadsheet) {
             Logger.log(`[${FUNC_NAME} INFO] ${dashboardMsg}`);
 
         } else {
-            throw new Error("Failed to get or create Dashboard or Job Data sheets.");
+            throw new Error("Failed to get or create Dashboard or Helper Data sheets.");
         }
     } catch (e) {
         Logger.log(`[${FUNC_NAME} CRITICAL ERROR] Dashboard setup Exception: ${e.toString()}\n${e.stack}`);
         setupMessages.push(`Dashboard Module: CRITICAL EXCEPTION - ${e.message}`);
         overallSuccess = false; // Mark the overall setup as failed
     }
-    // --- END: RESTORED DASHBOARD & JOB DATA SETUP ---
+    // --- END: RESTORED DASHBOARD & HELPER DATA SETUP ---
 
     if (typeof TEMPLATE_SHEET_ID !== 'undefined' && TEMPLATE_SHEET_ID !== "" && activeSS.getId() === TEMPLATE_SHEET_ID) {
         const templateMsg = `[${FUNC_NAME} INFO] Target spreadsheet is the TEMPLATE. Setup SKIPPED.`;
@@ -127,14 +127,27 @@ function runFullProjectInitialSetup(passedSpreadsheet) {
     if (overallSuccess) {
         Logger.log(`[${FUNC_NAME} INFO] Applying final tab order...`);
         try {
-            const tabOrder = [DASHBOARD_TAB_NAME, APP_TRACKER_SHEET_TAB_NAME, LEADS_SHEET_TAB_NAME];
+            const tabOrder = [DASHBOARD_TAB_NAME, APP_TRACKER_SHEET_TAB_NAME, HELPER_SHEET_NAME, LEADS_SHEET_TAB_NAME];
+            const allSheets = activeSS.getSheets();
+            const sheetNames = allSheets.map(sheet => sheet.getName());
+
+            // Move specified tabs to the front
             tabOrder.forEach((sheetName, index) => {
-                const sheetToMove = activeSS.getSheetByName(sheetName);
-                if (sheetToMove) activeSS.setActiveSheet(sheetToMove).moveActiveSheet(index + 1);
+                if (sheetNames.includes(sheetName)) {
+                    const sheetToMove = activeSS.getSheetByName(sheetName);
+                    if (sheetToMove) {
+                        activeSS.setActiveSheet(sheetToMove);
+                        activeSS.moveActiveSheet(index + 1);
+                    }
+                }
             });
-            const jobDataSheet = activeSS.getSheetByName(JOB_DATA_SHEET_NAME);
-            if (jobDataSheet && !jobDataSheet.isSheetHidden()) jobDataSheet.hideSheet();
-            setupMessages.push("Branding: Tab order & job data visibility verified.");
+
+            // Hide the helper sheet
+            const helperSheet = activeSS.getSheetByName(HELPER_SHEET_NAME);
+            if (helperSheet && !helperSheet.isSheetHidden()) {
+                helperSheet.hideSheet();
+            }
+            setupMessages.push("Branding: Tab order & helper data visibility verified.");
         } catch (e) {
             Logger.log(`[${FUNC_NAME} WARN] Error finalizing tab order: ${e.message}`);
         }

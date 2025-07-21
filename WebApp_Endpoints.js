@@ -220,15 +220,15 @@ function doGet_WeeklyApplicationData(e) {
         });
     }
     
-    const jobDataSheet = ss.getSheetByName(JOB_DATA_SHEET_NAME); // Use the correct sheet name
-    if (!jobDataSheet) { // Update error message
+    const helperSheet = ss.getSheetByName(HELPER_SHEET_NAME);
+    if (!helperSheet) {
       return createJsonResponse({ 
           success: false, 
-          error: `Job data sheet ("${JOB_DATA_SHEET_NAME}") not found. Please run 'Update Dashboard Metrics' from the tools menu in your sheet.`
+          error: `Helper data sheet ("${HELPER_SHEET_NAME}") not found. Please run 'Update Dashboard Metrics' from the tools menu in your sheet.`
       });
     }
 
-    const headersRange = jobDataSheet.getRange("D1:E1").getDisplayValues(); // Read from jobDataSheet
+    const headersRange = helperSheet.getRange("D1:E1").getDisplayValues();
     if (headersRange[0][0] !== "Week Starting" || headersRange[0][1] !== "Applications") {
         return createJsonResponse({ 
             success: false, 
@@ -236,7 +236,7 @@ function doGet_WeeklyApplicationData(e) {
         });
     }
     
-    const lastDataRowInColD = jobDataSheet.getRange("D1:D").getValues().filter(String).length; // Read from jobDataSheet
+    const lastDataRowInColD = helperSheet.getRange("D1:D").getValues().filter(String).length;
     let weeklyData = [];
 
     if (lastDataRowInColD > 1) {
@@ -245,7 +245,7 @@ function doGet_WeeklyApplicationData(e) {
         const numRowsToFetchActual = lastDataRowInColD - startRowForFetch + 1;
         
         if (numRowsToFetchActual > 0) {
-            const rangeDataValues = jobDataSheet.getRange(startRowForFetch, 4, numRowsToFetchActual, 2).getDisplayValues(); // Read from jobDataSheet
+            const rangeDataValues = helperSheet.getRange(startRowForFetch, 4, numRowsToFetchActual, 2).getDisplayValues();
             rangeDataValues.forEach(row => {
                 if (row[0] && row[1]) {
                      weeklyData.push({ weekStarting: row[0], applications: row[1] });
@@ -255,7 +255,6 @@ function doGet_WeeklyApplicationData(e) {
     }
     
     Logger.log(`[${FUNC_NAME} INFO] Fetched ${weeklyData.length} weekly data points.`);
-    
     return createJsonResponse({ success: true, data: weeklyData });
 
   } catch (error) {

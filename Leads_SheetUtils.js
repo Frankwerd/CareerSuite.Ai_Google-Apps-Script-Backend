@@ -158,37 +158,3 @@ function writeJobDataToSheet_forLeads(sheet, jobData, headerMap) {
   } catch (e) { /* ... error log ... */ }
 }
 
-/**
- * Appends an error entry to the "Potential Job Leads" sheet.
- * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The "Potential Job Leads" sheet object.
- * @param {GoogleAppsScript.Gmail.GmailMessage | null} message The Gmail message that caused the error, or null if not message-specific.
- * @param {string} errorType A short description of the error type.
- * @param {string | Object} details Additional details about the error.
- * @param {Object} headerMap An object mapping header names to column numbers (used by writeJobDataToSheet_forLeads).
- */
-function writeErrorEntryToSheet_forLeads(sheet, message, errorType, details, headerMap) {
-  if (!sheet || typeof sheet.getName !== 'function') { Logger.log("[LEADS_SHEET_UTIL ERROR] writeErrorEntry: Invalid sheet object."); return; }
-  if (!headerMap || Object.keys(headerMap).length === 0) { Logger.log("[LEADS_SHEET_UTIL ERROR] writeErrorEntry: Invalid or empty headerMap."); return; }
-
-  const detailsString = (typeof details === 'string' ? details : JSON.stringify(details)).substring(0, 1500); // Increased limit for details
-  const subject = message && typeof message.getSubject === 'function' ? message.getSubject() : "N/A (No message object)";
-  const msgId = message && typeof message.getId === 'function' ? message.getId() : "N/A (No message object)";
-
-  Logger.log(`[LEADS_SHEET_UTIL INFO] Writing error entry for msg ID "${msgId}", Type: ${errorType}. Details (truncated): ${detailsString.substring(0,100)}...`);
-
-  const errorJobData = {
-      dateAdded: new Date(),
-      jobTitle: "PROCESSING ERROR", // Standardized error title
-      company: errorType.substring(0, 250),
-      location: "N/A",
-      sourceEmailSubject: subject,
-      linkToJobPosting: "N/A",
-      status: "Error", // Standardized error status
-      notes: `Type: ${errorType}. Details: ${detailsString}`,
-      sourceEmailId: msgId,
-      processedTimestamp: new Date()
-  };
-
-  // Use the main writeJobDataToSheet_forLeads function to ensure consistent column mapping
-  writeJobDataToSheet_forLeads(sheet, errorJobData, headerMap);
-}

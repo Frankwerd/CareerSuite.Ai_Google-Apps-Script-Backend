@@ -31,7 +31,6 @@ const MASTER_SCRIPT_ID = "12suq_wdzxKZy7S7MJ9bB2a2-DxiN_Kl5mUVHupR-YAqT-_54eU-gQ
 // For Job Application Tracker
 const APP_TRACKER_SHEET_TAB_NAME = "Applications";
 const DASHBOARD_TAB_NAME = "Dashboard";
-const HELPER_SHEET_NAME = "DashboardHelperData"; // This sheet will be hidden by default
 const JOB_DATA_SHEET_NAME = "Job Data"; // This sheet will be hidden by default
 // For Job Leads Tracker
 const LEADS_SHEET_TAB_NAME = "Potential Job Leads";

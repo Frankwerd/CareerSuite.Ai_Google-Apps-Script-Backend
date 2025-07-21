@@ -3,8 +3,6 @@ function _setupModule(config) {
   Logger.log(`\n==== ${FUNC_NAME}: STARTING - ${config.moduleName} Module Setup ====`);
   let messages = [];
   let moduleSuccess = true;
-  let dummyDataWasAdded = false;
-  let dataSh, dashboardSheet, helperSheet; // Declare here for broader scope within function
 
   if (!config.activeSS || typeof config.activeSS.getId !== 'function') {
     const errMsg = "CRITICAL: Invalid spreadsheet object passed.";
@@ -14,65 +12,26 @@ function _setupModule(config) {
   const activeSS = config.activeSS;
   Logger.log(`[${FUNC_NAME} INFO] Operating on: "${activeSS.getName()}" (ID: ${activeSS.getId()})`);
 
-  // --- A. Core Sheet Creation & Formatting ---
-  Logger.log(`[${FUNC_NAME} INFO] Setting up core sheets for ${config.moduleName} module...`);
+  // Setup module-specific sheet
   try {
-    // A.1: "Applications" Sheet
-    dataSh = activeSS.getSheetByName(config.sheetTabName);
+    let dataSh = activeSS.getSheetByName(config.sheetTabName);
     if (!dataSh) {
       dataSh = activeSS.insertSheet(config.sheetTabName);
       Logger.log(`[${FUNC_NAME} INFO] Created new sheet: "${config.sheetTabName}".`);
     } else {
       Logger.log(`[${FUNC_NAME} INFO] Found existing sheet: "${config.sheetTabName}".`);
     }
-    // Corrected THEME for Applications
-    if (!setupSheetFormatting(dataSh,
-      config.sheetHeaders,        // From Config.gs
-      config.columnWidths,          // From Config.gs
-      true,                             // applyBandingFlag = true
-      config.bandingTheme  // <<< ENSURE THIS IS .BLUE or .CYAN
-    )) {
+    if (!setupSheetFormatting(dataSh, config.sheetHeaders, config.columnWidths, true, config.bandingTheme)) {
       throw new Error(`Formatting failed for "${config.sheetTabName}".`);
     }
     dataSh.setTabColor(config.tabColor);
-    try { // Post-formatting specific tweaks
-      if (PEAK_STATUS_COL > 0 && PEAK_STATUS_COL <= dataSh.getMaxColumns() && !dataSh.isColumnHiddenByUser(PEAK_STATUS_COL)) {
-        dataSh.hideColumn(dataSh.getRange(1, PEAK_STATUS_COL));
-      }
-      if (EMAIL_LINK_COL > 0 && dataSh.getMaxRows() > 1 && dataSh.getMaxColumns() >= EMAIL_LINK_COL) {
-        dataSh.getRange(2, EMAIL_LINK_COL, dataSh.getMaxRows() - 1, 1).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
-      }
-    } catch (ePf) { Logger.log(`[${FUNC_NAME} WARN] Post-format tweaks for Apps sheet: ${ePf.message}`); }
     messages.push(`Sheet '${config.sheetTabName}': Setup OK. Color: ${config.tabColor}.`);
-
-    // A.2: "Dashboard" Sheet
-    dashboardSheet = getOrCreateDashboardSheet(activeSS); // From Dashboard.gs
-    if (!dashboardSheet) throw new Error(`Get/Create FAILED for sheet: '${DASHBOARD_TAB_NAME}'.`);
-    if (!formatDashboardSheet(dashboardSheet)) { // From Dashboard.gs
-      throw new Error(`Formatting FAILED for sheet: '${DASHBOARD_TAB_NAME}'.`);
-    } // Tab color for dashboard is set within getOrCreateDashboardSheet in Dashboard.gs
-    messages.push(`Sheet '${DASHBOARD_TAB_NAME}': Setup OK.`);
-
-    // A.3: "DashboardHelperData" Sheet
-    helperSheet = getOrCreateHelperSheet(activeSS); // From Dashboard.gs
-    if (!helperSheet) throw new Error(`Get/Create FAILED for sheet: '${HELPER_SHEET_NAME}'.`);
-    // Format helper sheet (headers, no banding) using SheetUtils.gs
-    if (!setupSheetFormatting(helperSheet, DASHBOARD_HELPER_HEADERS, HELPER_SHEET_COLUMN_WIDTHS, false)) {
-      throw new Error(`Basic Formatting FAILED for sheet: '${HELPER_SHEET_NAME}'.`);
-    }
-    // **** NEW CALL ****
-    if (!setupHelperSheetFormulas(helperSheet)) { // Call from Dashboard.gs to set formulas
-      throw new Error(`Setting formulas FAILED for sheet: '${HELPER_SHEET_NAME}'.`);
-    }
-    updateDashboardMetrics(dashboardSheet, helperSheet, dataSh);
-    if (!helperSheet.isSheetHidden()) helperSheet.hideSheet();
-    helperSheet.setTabColor(BRAND_COLORS.CHARCOAL); // From Config.gs
-    messages.push(`Sheet '${HELPER_SHEET_NAME}': Setup OK (Headers & Formulas set). Hidden. Color: Charcoal.`);
-
   } catch (e) {
-    Logger.log(`[${FUNC_NAME} ERROR] Core sheet setup failed: ${e.toString()}\nStack: ${e.stack}`);
-    messages.push(`Core sheet setup FAILED: ${e.message}.`); moduleSuccess = false;
+    Logger.log(`[${FUNC_NAME} ERROR] Module sheet setup failed: ${e.toString()}\nStack: ${e.stack}`);
+    messages.push(`Module sheet setup FAILED: ${e.message}.`);
+    moduleSuccess = false;
   }
+
 
   // --- B. Gmail Label & Filter Setup ---
   let trackerToProcessLabelId = null;

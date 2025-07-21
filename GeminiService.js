@@ -4,6 +4,80 @@
  */
 
 /**
+ * Private function to handle the core Gemini API call with retry logic.
+ * @param {string} prompt The complete prompt to send to the API.
+ * @param {string} apiKey The user's Gemini API key.
+ * @param {object} options Additional options for the API call.
+ * @returns {object|null} The parsed JSON response or null on failure.
+ * @private
+ */
+function _callGeminiAPI(prompt, apiKey, options = {}) {
+  const { maxAttempts = 2, logContext = "GEMINI_API" } = options;
+  const API_ENDPOINT = GEMINI_API_ENDPOINT_TEXT_ONLY + "?key=" + apiKey;
+
+  const payload = {
+    "contents": [{"parts": [{"text": prompt}]}],
+    "generationConfig": { "temperature": 0.2, "maxOutputTokens": 8192, "topP": 0.95, "topK": 40 },
+    "safetySettings": [
+      { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE" },
+      { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE" },
+      { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE" },
+      { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE" }
+    ]
+  };
+  const fetchOptions = {'method':'post', 'contentType':'application/json', 'payload':JSON.stringify(payload), 'muteHttpExceptions':true};
+
+  if(DEBUG_MODE) Logger.log(`[DEBUG] ${logContext}: Calling API. Prompt len (approx): ${prompt.length}`);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = UrlFetchApp.fetch(API_ENDPOINT, fetchOptions);
+      const responseCode = response.getResponseCode();
+      const responseBody = response.getContentText();
+
+      if(DEBUG_MODE) Logger.log(`[DEBUG] ${logContext} (Attempt ${attempt}): RC: ${responseCode}. Body(start): ${responseBody.substring(0,200)}`);
+
+      if (responseCode === 200) {
+        const jsonResponse = JSON.parse(responseBody);
+        if (jsonResponse.candidates && jsonResponse.candidates[0]?.content?.parts?.[0]?.text) {
+          let extractedJsonString = jsonResponse.candidates[0].content.parts[0].text.trim();
+          if (extractedJsonString.startsWith("```json")) extractedJsonString = extractedJsonString.substring(7).trim();
+          if (extractedJsonString.startsWith("```")) extractedJsonString = extractedJsonString.substring(3).trim();
+          if (extractedJsonString.endsWith("```")) extractedJsonString = extractedJsonString.substring(0, extractedJsonString.length - 3).trim();
+
+          if(DEBUG_MODE) Logger.log(`[DEBUG] ${logContext}: Cleaned JSON from API: ${extractedJsonString}`);
+          try {
+            return JSON.parse(extractedJsonString);
+          } catch (e) {
+            Logger.log(`[ERROR] ${logContext}: Error parsing JSON: ${e.toString()}\nString: >>>${extractedJsonString}<<<`);
+            return null;
+          }
+        } else {
+          Logger.log(`[ERROR] ${logContext}: API response structure unexpected. Body (start): ${responseBody.substring(0,500)}`);
+          return null;
+        }
+      } else if (responseCode === 429) {
+        Logger.log(`[WARN] ${logContext}: Rate limit (429). Attempt ${attempt}/${maxAttempts}. Waiting...`);
+        if (attempt < maxAttempts) {
+          Utilities.sleep(5000 + Math.floor(Math.random() * 5000));
+        }
+      } else {
+        Logger.log(`[ERROR] ${logContext}: API HTTP error. Code: ${responseCode}. Body (start): ${responseBody.substring(0,500)}`);
+        return null;
+      }
+    } catch (e) {
+      Logger.log(`[ERROR] ${logContext}: Exception during API call (Attempt ${attempt}): ${e.toString()}\nStack: ${e.stack}`);
+      if (attempt < maxAttempts) {
+        Utilities.sleep(3000);
+      }
+    }
+  }
+
+  Logger.log(`[ERROR] ${logContext}: Failed after ${maxAttempts} attempts.`);
+  return null;
+}
+
+/**
  * Calls the Gemini API to parse job application details from an email.
  * @param {string} emailSubject The subject of the email.
  * @param {string} emailBody The plain text body of the email.
@@ -11,22 +85,13 @@
  * @returns {{company: string, title: string, status: string}|null} An object with the parsed details or null on failure.
  */
 function callGemini_forApplicationDetails(emailSubject, emailBody, apiKey) {
-  if (!apiKey) {
-    Logger.log("[INFO] GEMINI_PARSE_APP: API Key not provided. Skipping Gemini call.");
-    return null;
-  }
-  if ((!emailSubject || emailSubject.trim() === "") && (!emailBody || emailBody.trim() === "")) {
-    Logger.log("[WARN] GEMINI_PARSE_APP: Both email subject and body are empty. Skipping Gemini call.");
+  if (!apiKey || (!emailSubject && !emailBody)) {
+    Logger.log("[INFO] GEMINI_PARSE_APP: API Key not provided or email content is empty. Skipping Gemini call.");
     return null;
   }
 
-  const API_ENDPOINT = GEMINI_API_ENDPOINT_TEXT_ONLY + "?key=" + apiKey;
-  if (DEBUG_MODE) Logger.log(`[DEBUG] GEMINI_PARSE_APP: Using API Endpoint: ${API_ENDPOINT.split('key=')[0] + "key=..."}`);
-
-  const bodySnippet = emailBody ? emailBody.substring(0, 12000) : ""; // Max 12k chars for body snippet
-
-// --- START: Replacement for the prompt in callGemini_forApplicationDetails ---
-const prompt = `You are a highly specialized AI assistant expert in parsing job application-related emails for a tracking system. Your sole purpose is to analyze the provided email Subject and Body, and extract three key pieces of information: "company_name", "job_title", and "status". You MUST return this information ONLY as a single, valid JSON object, with no surrounding text, explanations, apologies, or markdown.
+  const bodySnippet = emailBody ? emailBody.substring(0, 12000) : "";
+  const prompt = `You are a highly specialized AI assistant expert in parsing job application-related emails for a tracking system. Your sole purpose is to analyze the provided email Subject and Body, and extract three key pieces of information: "company_name", "job_title", and "status". You MUST return this information ONLY as a single, valid JSON object, with no surrounding text, explanations, apologies, or markdown.
 
 CRITICAL INSTRUCTIONS - READ AND FOLLOW CAREFULLY:
 
@@ -63,83 +128,21 @@ ${bodySnippet}
 
 JSON Output:
 `;
-// --- END: Replacement for the prompt in callGemini_forApplicationDetails ---
 
-  const payload = {
-    "contents": [{"parts": [{"text": prompt}]}],
-    "generationConfig": { "temperature": 0.2, "maxOutputTokens": 2048, "topP": 0.95, "topK": 40 },
-    "safetySettings": [ 
-      { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE" },
-      { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE" },
-      { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE" },
-      { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE" }
-    ]
-  };
-  const options = {'method':'post', 'contentType':'application/json', 'payload':JSON.stringify(payload), 'muteHttpExceptions':true};
+  const extractedData = _callGeminiAPI(prompt, apiKey, { logContext: "GEMINI_PARSE_APP" });
 
-  if(DEBUG_MODE)Logger.log(`[DEBUG] GEMINI_PARSE_APP: Calling API for subj: "${emailSubject.substring(0,100)}". Prompt len (approx): ${prompt.length}`);
-  let response; let attempt = 0; const maxAttempts = 2;
-
-  while(attempt < maxAttempts){
-    attempt++;
-    try {
-      response = UrlFetchApp.fetch(API_ENDPOINT, options);
-      const responseCode = response.getResponseCode(); const responseBody = response.getContentText();
-      if(DEBUG_MODE) Logger.log(`[DEBUG] GEMINI_PARSE_APP (Attempt ${attempt}): RC: ${responseCode}. Body(start): ${responseBody.substring(0,200)}`);
-
-      if (responseCode === 200) {
-        const jsonResponse = JSON.parse(responseBody);
-        if (jsonResponse.candidates && jsonResponse.candidates[0]?.content?.parts?.[0]?.text) {
-          let extractedJsonString = jsonResponse.candidates[0].content.parts[0].text.trim();
-          if (extractedJsonString.startsWith("```json")) extractedJsonString = extractedJsonString.substring(7).trim();
-          if (extractedJsonString.startsWith("```")) extractedJsonString = extractedJsonString.substring(3).trim();
-          if (extractedJsonString.endsWith("```")) extractedJsonString = extractedJsonString.substring(0, extractedJsonString.length - 3).trim();
-          
-          if(DEBUG_MODE)Logger.log(`[DEBUG] GEMINI_PARSE_APP: Cleaned JSON from API: ${extractedJsonString}`);
-          try {
-            const extractedData = JSON.parse(extractedJsonString);
-            if (typeof extractedData.company_name !== 'undefined' && 
-                typeof extractedData.job_title !== 'undefined' && 
-                typeof extractedData.status !== 'undefined') {
-              Logger.log(`[INFO] GEMINI_PARSE_APP: Success. C:"${extractedData.company_name}", T:"${extractedData.job_title}", S:"${extractedData.status}"`);
-              return {
-                  company: extractedData.company_name || MANUAL_REVIEW_NEEDED, 
-                  title: extractedData.job_title || MANUAL_REVIEW_NEEDED, 
-                  status: extractedData.status || MANUAL_REVIEW_NEEDED
-              };
-            } else {
-              Logger.log(`[WARN] GEMINI_PARSE_APP: JSON from Gemini missing fields. Output: ${extractedJsonString}`);
-              return {company:MANUAL_REVIEW_NEEDED, title:MANUAL_REVIEW_NEEDED, status:MANUAL_REVIEW_NEEDED};
-            }
-          } catch (e) {
-            Logger.log(`[ERROR] GEMINI_PARSE_APP: Error parsing JSON: ${e.toString()}\nString: >>>${extractedJsonString}<<<`);
-            return {company:MANUAL_REVIEW_NEEDED, title:MANUAL_REVIEW_NEEDED, status:MANUAL_REVIEW_NEEDED};
-          }
-        } else {
-          Logger.log(`[ERROR] GEMINI_PARSE_APP: API response structure unexpected. Body (start): ${responseBody.substring(0,500)}`);
-          return null; 
-        }
-      } else if (responseCode === 429) {
-        Logger.log(`[WARN] GEMINI_PARSE_APP: Rate limit (429). Attempt ${attempt}/${maxAttempts}. Waiting...`);
-        if (attempt < maxAttempts) { Utilities.sleep(5000 + Math.floor(Math.random() * 5000)); continue; }
-        else { Logger.log(`[ERROR] GEMINI_PARSE_APP: Max retries for rate limit.`); return null; }
-      } else {
-        Logger.log(`[ERROR] GEMINI_PARSE_APP: API HTTP error. Code: ${responseCode}. Body (start): ${responseBody.substring(0,500)}`);
-        if (responseCode === 404 && responseBody.includes("is not found for API version")) {
-            Logger.log(`[FATAL] GEMINI_MODEL_ERROR_APP: Model ${API_ENDPOINT.split('/models/')[1].split(':')[0]} not found.`)
-        }
-        return null;
-      }
-    } catch (e) {
-      Logger.log(`[ERROR] GEMINI_PARSE_APP: Exception during API call (Attempt ${attempt}): ${e.toString()}\nStack: ${e.stack}`);
-      if (attempt < maxAttempts) { Utilities.sleep(3000); continue; }
-      return {error: e.toString()};
-    }
+  if (extractedData && typeof extractedData.company_name !== 'undefined' && typeof extractedData.job_title !== 'undefined' && typeof extractedData.status !== 'undefined') {
+    Logger.log(`[INFO] GEMINI_PARSE_APP: Success. C:"${extractedData.company_name}", T:"${extractedData.job_title}", S:"${extractedData.status}"`);
+    return {
+        company: extractedData.company_name || MANUAL_REVIEW_NEEDED,
+        title: extractedData.job_title || MANUAL_REVIEW_NEEDED,
+        status: extractedData.status || MANUAL_REVIEW_NEEDED
+    };
+  } else {
+    Logger.log(`[WARN] GEMINI_PARSE_APP: JSON from Gemini missing fields or API call failed. Output: ${JSON.stringify(extractedData)}`);
+    return {company:MANUAL_REVIEW_NEEDED, title:MANUAL_REVIEW_NEEDED, status:MANUAL_REVIEW_NEEDED};
   }
-  Logger.log(`[ERROR] GEMINI_PARSE_APP: Failed after ${maxAttempts} attempts.`);
-  return {error: `Failed after ${maxAttempts} attempts.`};
 }
-
 
 function callGemini_forJobLeads(emailBody, apiKey) {
     if (typeof emailBody !== 'string') {
@@ -147,15 +150,12 @@ function callGemini_forJobLeads(emailBody, apiKey) {
         return { success: false, data: null, error: `emailBody is not a string.` };
     }
 
-    const API_ENDPOINT = GEMINI_API_ENDPOINT_TEXT_ONLY + "?key=" + apiKey;
-
-    if (!apiKey || apiKey === 'AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' || apiKey.trim() === '') {
+    if (!apiKey || apiKey.trim() === '') {
         const errorMsg = "API Key is not set. Please set it in the configuration.";
         Logger.log(`[GEMINI_LEADS ERROR] ${errorMsg}`);
         return { success: false, data: null, error: errorMsg };
     }
 
-    // --- MODIFIED PROMPT ---
     const promptText = `You are an expert AI assistant specializing in extracting job posting details from email content, typically from job alerts or direct emails containing job opportunities.
 From the following "Email Content", identify each distinct job posting.
 
@@ -200,70 +200,15 @@ Email Content:
 ---
 ${emailBody.substring(0, 30000)} 
 ---
-JSON Array Output:`; // Max characters for body increased slightly
+JSON Array Output:`;
 
-    const payload = {
-        contents: [{ parts: [{ "text": promptText }] }],
-        generationConfig: { 
-            temperature: 0.2, 
-            maxOutputTokens: 8192, // Kept high for potentially multiple listings
-            // responseMimeType: "application/json" // Can try adding this if LLM still includes ```json
-        },
-        safetySettings: [ 
-          { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE" },
-          { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE" },
-          { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE" },
-          { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE" }
-        ]
-    };
-    const options = { method: "post", contentType: "application/json", payload: JSON.stringify(payload), muteHttpExceptions: true };
-    let attempt = 0; const maxAttempts = 2; // Or 3 for more resilience
+    const parsedData = _callGeminiAPI(promptText, apiKey, { logContext: "GEMINI_LEADS" });
 
-    Logger.log(`[GEMINI_LEADS INFO] Calling Gemini for leads. Prompt length (approx): ${promptText.length}`);
-
-    while (attempt < maxAttempts) {
-        attempt++;
-        Logger.log(`[GEMINI_LEADS] Starting attempt ${attempt}/${maxAttempts}...`);
-        try {
-            const response = UrlFetchApp.fetch(API_ENDPOINT, options);
-            const responseCode = response.getResponseCode(); 
-            const responseBody = response.getContentText();
-            Logger.log(`[GEMINI_LEADS DEBUG Attempt ${attempt}] RC: ${responseCode}. Body (start): ${responseBody.substring(0, 250)}...`);
-
-            if (responseCode === 200) {
-                try { 
-                    // The response from Gemini might already be the JSON part.
-                    // parseGeminiResponse_forJobLeads will handle cleaning ```json
-                    return { success: true, data: JSON.parse(responseBody), error: null }; 
-                }
-                catch (jsonParseError) {
-                    Logger.log(`[GEMINI_LEADS API ERROR] Parse Gemini JSON after 200 OK: ${jsonParseError}. Raw Body: ${responseBody}`);
-                    return { success: false, data: null, error: `Parse API JSON (200 OK): ${jsonParseError}. Response: ${responseBody.substring(0,500)}` };
-                }
-            } else if (responseCode === 429 && attempt < maxAttempts) { // Rate limit
-                Logger.log(`[GEMINI_LEADS] API returned 429. Sleeping before retry...`);
-                Utilities.sleep(3000 + Math.random() * 2000); 
-                continue;
-            } else { // Other HTTP errors
-                Logger.log(`[GEMINI_LEADS API ERROR ${responseCode}] Full error: ${responseBody}`);
-                const parsedError = JSON.parse(responseBody); // Try to parse error for details
-                if (parsedError && parsedError.error && parsedError.error.message) {
-                     return { success: false, data: null, error: `API Error ${responseCode}: ${parsedError.error.message}` };
-                }
-                return { success: false, data: null, error: `API Error ${responseCode}: ${responseBody.substring(0,500)}` };
-            }
-        } catch (e) { // Catch UrlFetchApp.fetch exceptions
-            Logger.log(`[GEMINI_LEADS] Caught exception on attempt ${attempt}: ${e.message}.`);
-            if (attempt < maxAttempts) {
-                Logger.log(`[GEMINI_LEADS] Sleeping before retry...`);
-                Utilities.sleep(2000 + Math.random()*1000);
-                continue;
-            }
-            return { success: false, data: null, error: `Fetch Error after ${maxAttempts} attempts: ${e.toString()}` };
-        }
+    if (parsedData) {
+        return { success: true, data: parsedData, error: null };
+    } else {
+        return { success: false, data: null, error: "Failed to get a valid response from Gemini API." };
     }
-    Logger.log(`[GEMINI_LEADS ERROR] Exceeded max retries for Gemini API.`);
-    return { success: false, data: null, error: `Exceeded max retries (${maxAttempts}) for Gemini API.` };
 }
 
 // --- You will ALSO need to update `parseGeminiResponse_forJobLeads` ---

@@ -1,23 +1,7 @@
 /**
- * @file Manages the Dashboard and DashboardHelperData sheets,
+ * @file Manages the Dashboard and Job Data sheets,
  * including chart creation and formula setup for helper data.
  */
-
-/**
- * Converts a column index to its letter representation.
- * @param {number} column The column index (1-based).
- * @returns {string} The column letter.
- * @private
- */
-function _columnToLetter_DashboardLocal(column) {
-  let temp, letter = '';
-  while (column > 0) {
-    temp = (column - 1) % 26;
-    letter = String.fromCharCode(temp + 65) + letter;
-    column = (column - temp - 1) / 26;
-  }
-  return letter;
-}
 
 /**
  * Gets or creates the Dashboard sheet and sets its tab color.
@@ -87,10 +71,10 @@ function formatDashboardSheet(dashboardSheet) {
     dashboardSheet.setRowHeight(3, 30); dashboardSheet.setRowHeight(4, 10);
 
     const appSheetNameForFormula = `'${APP_TRACKER_SHEET_TAB_NAME}'`;
-    const companyColLetter = _columnToLetter_DashboardLocal(COMPANY_COL);
-    const jobTitleColLetter = _columnToLetter_DashboardLocal(JOB_TITLE_COL);
-    const statusColLetter = _columnToLetter_DashboardLocal(STATUS_COL);
-    const peakStatusColLetter = _columnToLetter_DashboardLocal(PEAK_STATUS_COL);
+    const companyColLetter = columnToLetter(COMPANY_COL);
+    const jobTitleColLetter = columnToLetter(JOB_TITLE_COL);
+    const statusColLetter = columnToLetter(STATUS_COL);
+    const peakStatusColLetter = columnToLetter(PEAK_STATUS_COL);
 
     // Scorecard Setup (Formulas direct to Applications sheet)
     // Row 1
@@ -161,108 +145,81 @@ function formatDashboardSheet(dashboardSheet) {
 }
 
 /**
- * Gets or creates the helper data sheet.
- * Detailed formatting is handled by `initialSetup_LabelsAndSheet` in `Main.js`.
+ * Gets or creates the job data sheet.
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet The spreadsheet object.
- * @returns {GoogleAppsScript.Spreadsheet.Sheet | null} The helper sheet or null if an error occurs.
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet | null} The job data sheet or null if an error occurs.
  */
-function getOrCreateHelperSheet(spreadsheet) {
-  const FUNC_NAME = "getOrCreateHelperSheet";
+function getOrCreateJobDataSheet(spreadsheet) {
+  const FUNC_NAME = "getOrCreateJobDataSheet";
   if (!spreadsheet || typeof spreadsheet.getSheetByName !== 'function') { Logger.log(`[${FUNC_NAME} ERROR] Invalid spreadsheet.`); return null;}
-  let helperSheet = spreadsheet.getSheetByName(HELPER_SHEET_NAME); 
-  if (!helperSheet) {
-    try { helperSheet = spreadsheet.insertSheet(HELPER_SHEET_NAME); Logger.log(`[${FUNC_NAME} INFO] Created: "${HELPER_SHEET_NAME}".`);}
-    catch (eCreate) { Logger.log(`[${FUNC_NAME} ERROR] Create Fail for "${HELPER_SHEET_NAME}": ${eCreate.message}`); return null;}
-  } else { Logger.log(`[${FUNC_NAME} INFO] Found: "${HELPER_SHEET_NAME}".`); }
-  return helperSheet;
+  let jobDataSheet = spreadsheet.getSheetByName(JOB_DATA_SHEET_NAME);
+  if (!jobDataSheet) {
+    try { jobDataSheet = spreadsheet.insertSheet(JOB_DATA_SHEET_NAME); Logger.log(`[${FUNC_NAME} INFO] Created: "${JOB_DATA_SHEET_NAME}".`);}
+    catch (eCreate) { Logger.log(`[${FUNC_NAME} ERROR] Create Fail for "${JOB_DATA_SHEET_NAME}": ${eCreate.message}`); return null;}
+  } else { Logger.log(`[${FUNC_NAME} INFO] Found: "${JOB_DATA_SHEET_NAME}".`); }
+  return jobDataSheet;
 }
 
 /**
- * Sets up the formulas in the `DashboardHelperData` sheet. This is called once during initial setup.
- * @param {GoogleAppsScript.Spreadsheet.Sheet} helperSheet The `DashboardHelperData` sheet object.
+ * Sets up the formulas in the `Job Data` sheet. This is called once during initial setup.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} jobDataSheet The `Job Data` sheet object.
  * @returns {boolean} True if formulas were set successfully, false otherwise.
  */
-function setupHelperSheetFormulas(helperSheet) {
-  const FUNC_NAME = "setupHelperSheetFormulas";
-  if (!helperSheet || typeof helperSheet.getName !== 'function') {
-    Logger.log(`[${FUNC_NAME} ERROR] Invalid helperSheet object passed.`);
+function setupJobDataSheetFormulas(jobDataSheet) {
+  const FUNC_NAME = "setupJobDataSheetFormulas";
+  if (!jobDataSheet || typeof jobDataSheet.getName !== 'function') {
+    Logger.log(`[${FUNC_NAME} ERROR] Invalid jobDataSheet object passed.`);
     return false;
   }
-  Logger.log(`[${FUNC_NAME} INFO] Setting up formulas in "${helperSheet.getName()}" based on OLD LOGIC structure.`);
+  Logger.log(`[${FUNC_NAME} INFO] Setting up formulas in "${jobDataSheet.getName()}" based on NEW LOGIC structure.`);
 
   try {
     // Clear existing content to ensure clean state for new formulas
-    const maxRows = helperSheet.getMaxRows();
-    const maxCols = helperSheet.getMaxColumns();
+    const maxRows = jobDataSheet.getMaxRows();
+    const maxCols = jobDataSheet.getMaxColumns();
     if (maxRows > 0 && maxCols > 0) {
-        helperSheet.getRange(1, 1, maxRows, maxCols).clearContent().clearNote();
-        Logger.log(`[${FUNC_NAME} INFO] Cleared content from helper sheet "${helperSheet.getName()}".`);
+        jobDataSheet.getRange(1, 1, maxRows, maxCols).clearContent().clearNote();
+        Logger.log(`[${FUNC_NAME} INFO] Cleared content from job data sheet "${jobDataSheet.getName()}".`);
     }
 
     // --- Define sheet references and column letters needed for formulas ---
-    // These constants MUST be available from Config.gs
-    const appSheetNameForFormula = `'${APP_TRACKER_SHEET_TAB_NAME}'!`; // e.g., "'Applications'!"
-    const platformColLetter = _columnToLetter_DashboardLocal(PLATFORM_COL);
-    const emailDateColLetter = _columnToLetter_DashboardLocal(EMAIL_DATE_COL);
-    const peakStatusColLetter = _columnToLetter_DashboardLocal(PEAK_STATUS_COL);
-    const companyColLetter = _columnToLetter_DashboardLocal(COMPANY_COL); // Used for "Total Applications" in funnel
+    const appSheetNameForFormula = `'${APP_TRACKER_SHEET_TAB_NAME}'!`;
+    const platformColLetter = columnToLetter(PLATFORM_COL);
+    const emailDateColLetter = columnToLetter(EMAIL_DATE_COL);
+    const peakStatusColLetter = columnToLetter(PEAK_STATUS_COL);
+    const companyColLetter = columnToLetter(COMPANY_COL);
 
-    // --- 1. Platform Distribution Data (Formulas for Helper Columns A:B) ---
-    helperSheet.getRange("A1").setValue("Platform");
-    helperSheet.getRange("B1").setValue("Count");
-    // This QUERY formula gets unique platforms and their counts from Applications sheet's platform column
+    // --- 1. Platform Distribution Data (Formulas for Columns A:B) ---
+    jobDataSheet.getRange("A1").setValue("Platform");
+    jobDataSheet.getRange("B1").setValue("Count");
     const platformQueryFormula = `=IFERROR(QUERY(${appSheetNameForFormula}${platformColLetter}2:${platformColLetter}, "SELECT Col1, COUNT(Col1) WHERE Col1 IS NOT NULL AND Col1 <> '' GROUP BY Col1 ORDER BY COUNT(Col1) DESC LABEL Col1 '', COUNT(Col1) ''", 0), {"No Platform Data",0})`;
-    helperSheet.getRange("A2").setFormula(platformQueryFormula);
-    Logger.log(`[${FUNC_NAME} INFO] Platform distribution formula set in Helper A2: ${platformQueryFormula}`);
+    jobDataSheet.getRange("A2").setFormula(platformQueryFormula);
+    Logger.log(`[${FUNC_NAME} INFO] Platform distribution formula set in A2: ${platformQueryFormula}`);
 
-    // --- 2. Data for Applications Over Time (Weekly) Chart ---
-    // Intermediate calculation columns (J & K) for weekly data as per your "OLD LOGIC"
-    helperSheet.getRange("J1").setValue("RAW_VALID_DATES_FOR_WEEKLY");
-    const rawDatesFormula = `=IFERROR(FILTER(${appSheetNameForFormula}${emailDateColLetter}2:${emailDateColLetter}, ISNUMBER(${appSheetNameForFormula}${emailDateColLetter}2:${emailDateColLetter})), "")`;
-    helperSheet.getRange("J2").setFormula(rawDatesFormula);
-    helperSheet.getRange("J2:J").setNumberFormat("yyyy-mm-dd hh:mm:ss"); // Original format for raw dates
+    // --- 2. Data for Applications Over Time (Weekly) Chart (Columns D:E) ---
+    jobDataSheet.getRange("D1").setValue("Week Starting");
+    jobDataSheet.getRange("E1").setValue("Applications");
+    const weeklyQueryFormula = `=IFERROR(QUERY(${appSheetNameForFormula}${emailDateColLetter}2:${emailDateColLetter}, "SELECT DATE(YEAR(Col1), MONTH(Col1), DAY(Col1) - WEEKDAY(Col1, 2) + 1), COUNT(Col1) WHERE Col1 IS NOT NULL GROUP BY DATE(YEAR(Col1), MONTH(Col1), DAY(Col1) - WEEKDAY(Col1, 2) + 1) ORDER BY DATE(YEAR(Col1), MONTH(Col1), DAY(Col1) - WEEKDAY(Col1, 2) + 1) ASC LABEL DATE(YEAR(Col1), MONTH(Col1), DAY(Col1) - WEEKDAY(Col1, 2) + 1) '', COUNT(Col1) ''", 0), {"No Date Data",0})`;
+    jobDataSheet.getRange("D2").setFormula(weeklyQueryFormula);
+    jobDataSheet.getRange("D2:D").setNumberFormat("M/d/yyyy");
+    Logger.log(`[${FUNC_NAME} INFO] Weekly applications formula set in D2: ${weeklyQueryFormula}`);
 
-    helperSheet.getRange("K1").setValue("CALCULATED_WEEK_STARTS (Mon)");
-    // Formula for Monday as week start: DATE(YEAR(J2), MONTH(J2), DAY(J2) - WEEKDAY(J2,2) + 1)
-    const weekStartCalcFormula = `=ARRAYFORMULA(IF(ISBLANK(J2:J), "", DATE(YEAR(J2:J), MONTH(J2:J), DAY(J2:J) - WEEKDAY(J2:J, 2) + 1)))`;
-    helperSheet.getRange("K2").setFormula(weekStartCalcFormula);
-    helperSheet.getRange("K2:K").setNumberFormat("yyyy-mm-dd"); // Original format for calculated week starts
-
-    // Final aggregated weekly data for chart (Helper Columns D:E)
-    helperSheet.getRange("D1").setValue("Week Starting"); // Header for chart data source
-    const uniqueWeeksFormula = `=IFERROR(SORT(UNIQUE(FILTER(K2:K, K2:K<>""))), {"No Date Data"})`; // Get unique week start dates from K
-    helperSheet.getRange("D2").setFormula(uniqueWeeksFormula);
-    helperSheet.getRange("D2:D").setNumberFormat("M/d/yyyy"); // Chart-friendly date format for axis
-
-    helperSheet.getRange("E1").setValue("Applications"); // Header for chart data source
-    // Count applications for each unique week start date
-    const weeklyCountsFormula = `=ARRAYFORMULA(IF(D2:D="", "", COUNTIF(K2:K, D2:D)))`;
-    helperSheet.getRange("E2").setFormula(weeklyCountsFormula);
-    helperSheet.getRange("E2:E").setNumberFormat("0");
-    Logger.log(`[${FUNC_NAME} INFO] Weekly applications formulas set in Helper (D2, E2 using intermediate J:K).`);
-
-    // --- 3. Data for Application Funnel (Peak Stages) Chart (Helper Columns G:H) ---
-    helperSheet.getRange("G1").setValue("Stage"); 
-    helperSheet.getRange("H1").setValue("Count");
-    const funnelStagesValues = [DEFAULT_STATUS, APPLICATION_VIEWED_STATUS, ASSESSMENT_STATUS, INTERVIEW_STATUS, OFFER_STATUS]; // From Config.gs
+    // --- 3. Data for Application Funnel (Peak Stages) Chart (Columns G:H) ---
+    jobDataSheet.getRange("G1").setValue("Stage");
+    jobDataSheet.getRange("H1").setValue("Count");
+    const funnelStagesValues = [DEFAULT_STATUS, APPLICATION_VIEWED_STATUS, ASSESSMENT_STATUS, INTERVIEW_STATUS, OFFER_STATUS];
+    jobDataSheet.getRange(2, 7, funnelStagesValues.length, 1).setValues(funnelStagesValues.map(stage => [stage]));
     
-    // Write stage names to column G
-    helperSheet.getRange(2, 7, funnelStagesValues.length, 1).setValues(funnelStagesValues.map(stage => [stage]));
-    
-    // Set formulas for counts in column H
-    // First stage (e.g., "Applied") often represents total applications. Your old logic had this for H2:
-    helperSheet.getRange("H2").setFormula(`=IFERROR(COUNTA(${appSheetNameForFormula}${companyColLetter}2:${companyColLetter}),0)`); 
-    // For subsequent stages, count based on Peak Status matching the stage in column G
-    for (let i = 1; i < funnelStagesValues.length; i++) { // Starts from the second stage in your array
-      // Example: For row 3 (second stage), formula in H3 refers to G3
-      helperSheet.getRange(i + 2, 8).setFormula(`=IFERROR(COUNTIF(${appSheetNameForFormula}${peakStatusColLetter}2:${peakStatusColLetter}, G${i + 2}),0)`);
+    jobDataSheet.getRange("H2").setFormula(`=IFERROR(COUNTA(${appSheetNameForFormula}${companyColLetter}2:${companyColLetter}),0)`);
+    for (let i = 1; i < funnelStagesValues.length; i++) {
+      jobDataSheet.getRange(i + 2, 8).setFormula(`=IFERROR(COUNTIF(${appSheetNameForFormula}${peakStatusColLetter}2:${peakStatusColLetter}, G${i + 2}),0)`);
     }
-    Logger.log(`[${FUNC_NAME} INFO] Funnel stage formulas set in Helper G:H.`);
+    Logger.log(`[${FUNC_NAME} INFO] Funnel stage formulas set in G:H.`);
     
-    SpreadsheetApp.flush(); // Ensure formulas calculate initially
+    SpreadsheetApp.flush();
     return true;
   } catch (e) {
-    Logger.log(`[${FUNC_NAME} ERROR] Error setting formulas in helper sheet: ${e.toString()}\nStack: ${e.stack}`);
+    Logger.log(`[${FUNC_NAME} ERROR] Error setting formulas in job data sheet: ${e.toString()}\nStack: ${e.stack}`);
     return false;
   }
 }
@@ -270,54 +227,44 @@ function setupHelperSheetFormulas(helperSheet) {
 
 /**
  * Ensures charts on the Dashboard sheet are created or updated.
- * This function relies on the `DashboardHelperData` sheet being populated by formulas.
+ * This function relies on the `Job Data` sheet being populated by formulas.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} dashboardSheet The "Dashboard" sheet object.
- * @param {GoogleAppsScript.Spreadsheet.Sheet} helperSheet The "DashboardHelperData" sheet object.
- * @param {GoogleAppsScript.Spreadsheet.Sheet} [applicationsSheet] Optional for context.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} jobDataSheet The "Job Data" sheet object.
  */
-function updateDashboardMetrics(dashboardSheet, helperSheet, applicationsSheet) {
+function updateDashboardMetrics(dashboardSheet, jobDataSheet) {
   const FUNC_NAME = "updateDashboardMetrics";
-  Logger.log(`\n==== ${FUNC_NAME}: STARTING - Verifying/Updating Charts (Helper is Formula-Driven) ====`);
+  Logger.log(`\n==== ${FUNC_NAME}: STARTING - Verifying/Updating Charts (Job Data is Formula-Driven) ====`);
 
-  if (!helperSheet || typeof helperSheet.getName !== 'function') { Logger.log(`[${FUNC_NAME} ERROR] Helper sheet invalid.`); return; }
+  if (!jobDataSheet || typeof jobDataSheet.getName !== 'function') { Logger.log(`[${FUNC_NAME} ERROR] Job Data sheet invalid.`); return; }
   if (!dashboardSheet && DEBUG_MODE) { Logger.log(`[${FUNC_NAME} WARN] Dashboard sheet invalid. Charts cannot be updated.`); }
-  // applicationsSheet parameter is kept for context, though not directly used by THIS version of updateDashboardMetrics for data population.
 
-  Logger.log(`[${FUNC_NAME} INFO] Helper data is formula-driven. Refreshing charts on "${dashboardSheet ? dashboardSheet.getName() : 'N/A'}"...`);
+  Logger.log(`[${FUNC_NAME} INFO] Job data is formula-driven. Refreshing charts on "${dashboardSheet ? dashboardSheet.getName() : 'N/A'}"...`);
   
-  // Force recalculation of all formulas in the spreadsheet
   SpreadsheetApp.flush(); 
-  // Add a small delay to allow complex formulas (especially QUERY) to complete calculation
-  Utilities.sleep(2000); // Increased pause to 2 seconds
+  Utilities.sleep(2000);
 
-  if (dashboardSheet && helperSheet) { 
+  if (dashboardSheet && jobDataSheet) {
      Logger.log(`[${FUNC_NAME} INFO] Calling chart creation/update functions...`);
      try {
-        updatePlatformDistributionChart(dashboardSheet, helperSheet);
-        updateApplicationsOverTimeChart(dashboardSheet, helperSheet);
-        updateApplicationFunnelChart(dashboardSheet, helperSheet);
+        updatePlatformDistributionChart(dashboardSheet, jobDataSheet);
+        updateApplicationsOverTimeChart(dashboardSheet, jobDataSheet);
+        updateApplicationFunnelChart(dashboardSheet, jobDataSheet);
         Logger.log(`[${FUNC_NAME} INFO] Chart update/creation process successfully called.`);
      } catch (e) { 
         Logger.log(`[${FUNC_NAME} ERROR] Chart update calls threw an error: ${e.toString()}\nStack: ${e.stack}`); 
      }
   } else {
-      Logger.log(`[${FUNC_NAME} WARN] Skipping chart object updates - dashboardSheet or helperSheet is missing.`);
+      Logger.log(`[${FUNC_NAME} WARN] Skipping chart object updates - dashboardSheet or jobDataSheet is missing.`);
   }
   Logger.log(`\n==== ${FUNC_NAME} FINISHED ====`);
 }
 
-// --- Dashboard Chart Update Functions ---
-// (These are updatePlatformDistributionChart, updateApplicationsOverTimeChart, updateApplicationFunnelChart, 
-//  and BRAND_COLORS_CHART_ARRAY - use the versions from your latest log where the setOption loop was working,
-//  or the version I provided just before with those setOption loops.)
-// Ensure their function names here EXACTLY match the calls in updateDashboardMetrics above.
-
 /**
  * Updates the platform distribution pie chart on the dashboard.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} dashboardSheet The dashboard sheet.
- * @param {GoogleAppsScript.Spreadsheet.Sheet} helperSheet The helper data sheet.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} jobDataSheet The job data sheet.
  */
-function updatePlatformDistributionChart(dashboardSheet, helperSheet) {
+function updatePlatformDistributionChart(dashboardSheet, jobDataSheet) {
   const FUNC_NAME = "updatePlatformDistributionChart";
   const CHART_TITLE = "Platform Distribution";
   const ANCHOR_ROW = 13, ANCHOR_COL = 2;
@@ -330,27 +277,20 @@ function updatePlatformDistributionChart(dashboardSheet, helperSheet) {
     }
   });
 
-  if (helperSheet.getRange("A1").getValue().toString().trim() !== "Platform") { 
-      // ... (logging and chart removal logic if header is wrong) ...
+  if (jobDataSheet.getRange("A1").getValue().toString().trim() !== "Platform") {
       return;
   }
-  const dataRange = helperSheet.getRange("A:B"); 
-  Logger.log(`[${FUNC_NAME} INFO] Using data range ${helperSheet.getName()}!A:B for chart "${CHART_TITLE}".`);
+  const dataRange = jobDataSheet.getRange("A:B");
+  Logger.log(`[${FUNC_NAME} INFO] Using data range ${jobDataSheet.getName()}!A:B for chart "${CHART_TITLE}".`);
 
   const optionsObject = { 
     title: CHART_TITLE, 
-    // legend: { // Complex object commented out
-    //     position: Charts.Position.RIGHT, 
-    //     textStyle: { color: BRAND_COLORS.CHARCOAL, fontSize: 10 } 
-    // },
     pieHole: 0.4, 
     width: 480, 
     height: 300, 
-    sliceVisibilityThreshold: 0, // Show all slices to maximize chance of legend appearing
+    sliceVisibilityThreshold: 0,
     is3D: true, 
     colors: BRAND_COLORS_CHART_ARRAY() 
-    // Note: The 'legend' key itself is removed from this optionsObject initially.
-    // It will be added via setOption below.
   };
   
   try {
@@ -361,14 +301,11 @@ function updatePlatformDistributionChart(dashboardSheet, helperSheet) {
       chartBuilder = dashboardSheet.newChart().setChartType(Charts.ChartType.PIE).addRange(dataRange); 
     }
 
-    // Apply most options individually
     for (const key in optionsObject) { 
-      // The 'legend' key is not in optionsObject here, so this loop won't try to set it yet.
       chartBuilder = chartBuilder.setOption(key, optionsObject[key]); 
     } 
     
-    // ** Explicitly set legend position using a simple string **
-    chartBuilder = chartBuilder.setOption('legend', 'right'); // 'top', 'bottom', 'left', 'right', 'none', 'labeled' (for pie)
+    chartBuilder = chartBuilder.setOption('legend', 'right');
 
     if (existingChart) {
       dashboardSheet.updateChart(chartBuilder.setPosition(ANCHOR_ROW, ANCHOR_COL, 0, 0).build());
@@ -379,43 +316,27 @@ function updatePlatformDistributionChart(dashboardSheet, helperSheet) {
   } catch (e) { 
     Logger.log(`[${FUNC_NAME} ERROR] Build/insert/update "${CHART_TITLE}": ${e.message}`); 
   }
-
-  
-  try {
-    // ... (rest of the chart building logic with individual setOption calls) ...
-    let chartBuilder;
-    if (existingChart) { chartBuilder = existingChart.modify().clearRanges().addRange(dataRange).setChartType(Charts.ChartType.PIE); }
-    else { chartBuilder = dashboardSheet.newChart().setChartType(Charts.ChartType.PIE).addRange(dataRange); }
-    for (const key in optionsObject) { chartBuilder = chartBuilder.setOption(key, optionsObject[key]); } 
-    
-    if (existingChart) dashboardSheet.updateChart(chartBuilder.setPosition(ANCHOR_ROW, ANCHOR_COL, 0, 0).build());
-    else dashboardSheet.insertChart(chartBuilder.setPosition(ANCHOR_ROW, ANCHOR_COL, 0, 0).build());
-    Logger.log(`[${FUNC_NAME} INFO] Chart "${CHART_TITLE}" processed.`);
-  } catch (e) { 
-    Logger.log(`[${FUNC_NAME} ERROR] Build/insert/update "${CHART_TITLE}": ${e.message}`); 
-  }
 }
 
 /**
  * Updates the applications over time line chart on the dashboard.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} dashboardSheet The dashboard sheet.
- * @param {GoogleAppsScript.Spreadsheet.Sheet} helperSheet The helper data sheet.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} jobDataSheet The job data sheet.
  */
-function updateApplicationsOverTimeChart(dashboardSheet, helperSheet) {
+function updateApplicationsOverTimeChart(dashboardSheet, jobDataSheet) {
   const FUNC_NAME = "updateApplicationsOverTimeChart";
   const CHART_TITLE = "Applications Over Time (Weekly)";
   const ANCHOR_ROW = 13, ANCHOR_COL = 8;
   let existingChart = null;
   dashboardSheet.getCharts().forEach(chart => { if (chart.getOptions().get('title') === CHART_TITLE && chart.getContainerInfo().getAnchorColumn() === ANCHOR_COL && chart.getContainerInfo().getAnchorRow() === ANCHOR_ROW) existingChart = chart; });
 
-  if (helperSheet.getRange("D1").getValue().toString().trim() !== "Week Starting") {
-      Logger.log(`[${FUNC_NAME} WARN] Header "Week Starting" missing in Helper D1. Removing chart: ${CHART_TITLE}`);
+  if (jobDataSheet.getRange("D1").getValue().toString().trim() !== "Week Starting") {
+      Logger.log(`[${FUNC_NAME} WARN] Header "Week Starting" missing in Job Data D1. Removing chart: ${CHART_TITLE}`);
       if (existingChart) try { dashboardSheet.removeChart(existingChart); } catch (e) { Logger.log(`[${FUNC_NAME} ERROR] Remove chart: ${e.message}`); }
       return;
   }
-  // **MODIFIED: Use full column range D:E.**
-  const dataRange = helperSheet.getRange("D:E"); 
-  Logger.log(`[${FUNC_NAME} INFO] Using data range ${helperSheet.getName()}!D:E for chart "${CHART_TITLE}".`);
+  const dataRange = jobDataSheet.getRange("D:E");
+  Logger.log(`[${FUNC_NAME} INFO] Using data range ${jobDataSheet.getName()}!D:E for chart "${CHART_TITLE}".`);
   
   const optionsObject = { title:CHART_TITLE, hAxis:{title:'Week Starting',textStyle:{fontSize:10},format:'M/d', gridlines: {color: '#EEE'}}, vAxis:{title:'Applications',textStyle:{fontSize:10},viewWindow:{min:0},gridlines:{count:-1, color: '#CCC'}}, legend:{position:'none'}, colors:[BRAND_COLORS.LAPIS_LAZULI], width:480, height:300, pointSize: 5, lineWidth: 2 };
   try {
@@ -433,23 +354,22 @@ function updateApplicationsOverTimeChart(dashboardSheet, helperSheet) {
 /**
  * Updates the application funnel column chart on the dashboard.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} dashboardSheet The dashboard sheet.
- * @param {GoogleAppsScript.Spreadsheet.Sheet} helperSheet The helper data sheet.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} jobDataSheet The job data sheet.
  */
-function updateApplicationFunnelChart(dashboardSheet, helperSheet) {
+function updateApplicationFunnelChart(dashboardSheet, jobDataSheet) {
   const FUNC_NAME = "updateApplicationFunnelChart";
   const CHART_TITLE = "Application Funnel (Peak Stages)";
   const ANCHOR_ROW = 30, ANCHOR_COL = 2;
   let existingChart = null;
   dashboardSheet.getCharts().forEach(chart => { if (chart.getOptions().get('title') === CHART_TITLE && chart.getContainerInfo().getAnchorColumn() === ANCHOR_COL && chart.getContainerInfo().getAnchorRow() === ANCHOR_ROW) existingChart = chart; });
   
-  if (helperSheet.getRange("G1").getValue().toString().trim() !== "Stage") {
-      Logger.log(`[${FUNC_NAME} WARN] Header "Stage" missing in Helper G1. Removing chart: ${CHART_TITLE}`);
+  if (jobDataSheet.getRange("G1").getValue().toString().trim() !== "Stage") {
+      Logger.log(`[${FUNC_NAME} WARN] Header "Stage" missing in Job Data G1. Removing chart: ${CHART_TITLE}`);
       if (existingChart) try { dashboardSheet.removeChart(existingChart); } catch (e) { Logger.log(`[${FUNC_NAME} ERROR] Remove chart: ${e.message}`); }
       return;
   }
-  // **MODIFIED: Use full column range G:H.**
-  const dataRange = helperSheet.getRange("G:H"); 
-  Logger.log(`[${FUNC_NAME} INFO] Using data range ${helperSheet.getName()}!G:H for chart "${CHART_TITLE}".`);
+  const dataRange = jobDataSheet.getRange("G:H");
+  Logger.log(`[${FUNC_NAME} INFO] Using data range ${jobDataSheet.getName()}!G:H for chart "${CHART_TITLE}".`);
 
   const optionsObject = { title:CHART_TITLE, hAxis:{title:'Application Stage',textStyle:{fontSize:10},slantedText:true,slantedTextAngle:30}, vAxis:{title:'Applications',textStyle:{fontSize:10},viewWindow:{min:0},gridlines:{count:-1, color: '#CCC'}}, legend:{position:'none'}, colors:[BRAND_COLORS.CAROLINA_BLUE], bar:{groupWidth:'60%'}, width:480, height:300 };
   try {

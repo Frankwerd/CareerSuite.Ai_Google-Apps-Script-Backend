@@ -161,7 +161,7 @@ function setupSheetFormatting(sheet, headersArray, columnWidthsArray, applyBandi
 
 /**
  * Gets or creates the target spreadsheet.
- * It first checks for a stored spreadsheet ID, then a fixed ID, then by name, and finally creates a new one if none are found.
+ * It first checks for a stored spreadsheet ID, then by name, and finally creates a new one if none are found.
  * @returns {{spreadsheet: GoogleAppsScript.Spreadsheet.Spreadsheet}} An object containing the spreadsheet.
  */
 function getOrCreateSpreadsheetAndSheet() {
@@ -176,12 +176,6 @@ function getOrCreateSpreadsheetAndSheet() {
     } catch (e) {
       Logger.log(`[${FUNC_NAME} ERROR] Failed to open spreadsheet by stored ID: ${spreadsheetId}. Error: ${e.message}. Fallback to other methods.`);
     }
-  }
-
-  if (FIXED_SPREADSHEET_ID && FIXED_SPREADSHEET_ID.trim() !== "" && FIXED_SPREADSHEET_ID !== "YOUR_MASTER_TEMPLATE_SHEET_ID_GOES_HERE") {
-    Logger.log(`[${FUNC_NAME} INFO] Attempting to open by Fixed ID: "${FIXED_SPREADSHEET_ID}"`);
-    try { ss = SpreadsheetApp.openById(FIXED_SPREADSHEET_ID); Logger.log(`[${FUNC_NAME} INFO] Opened "${ss.getName()}" via Fixed ID.`); }
-    catch (e) { Logger.log(`[${FUNC_NAME} ERROR] Fixed ID Fail: ${e.message}. Trying by name.`); ss = null; }
   }
   
   if (!ss) {

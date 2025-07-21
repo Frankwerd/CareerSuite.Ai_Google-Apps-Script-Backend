@@ -108,8 +108,6 @@ function runFullProjectInitialSetup(passedSpreadsheet) {
             });
             const helperSheet = activeSS.getSheetByName(HELPER_SHEET_NAME);
             if (helperSheet && !helperSheet.isSheetHidden()) helperSheet.hideSheet();
-            const jobDataSheet = activeSS.getSheetByName(JOB_DATA_SHEET_NAME);
-            if (jobDataSheet && !jobDataSheet.isSheetHidden()) jobDataSheet.hideSheet();
             setupMessages.push("Branding: Tab order & helper visibility verified.");
         } catch (e) {
             Logger.log(`[${FUNC_NAME} WARN] Error finalizing tab order: ${e.message}`);
@@ -373,25 +371,34 @@ function _trackerDataHandler(geminiResult, message, companyIndex, dataSheet) {
         applicationStatus = parseBodyForStatus(message.getPlainBody());
     }
 
-    const requiresManualReview = (companyName === MANUAL_REVIEW_NEEDED || jobTitle === MANUAL_REVIEW_NEEDED);
-    const finalStatusToSet = applicationStatus || DEFAULT_STATUS;
     let existingRowInfoToUpdate = null;
     let targetSheetRowForUpdate = -1;
+    let requiresManualReview = (companyName === MANUAL_REVIEW_NEEDED || jobTitle === MANUAL_REVIEW_NEEDED);
 
-    if (companyName !== MANUAL_REVIEW_NEEDED) {
+    // Only attempt to find a row to update if BOTH company and title are valid.
+    if (companyName !== MANUAL_REVIEW_NEEDED && jobTitle !== MANUAL_REVIEW_NEEDED) {
         const potentialMatches = companyIndex.get(String(companyName).toLowerCase()) || [];
-        if (jobTitle !== MANUAL_REVIEW_NEEDED) {
-            existingRowInfoToUpdate = potentialMatches.find(e => e.title && e.title.toLowerCase() === jobTitle.toLowerCase());
-        }
-        if (!existingRowInfoToUpdate && potentialMatches.length > 0) {
-            existingRowInfoToUpdate = potentialMatches.reduce((latest, current) => (current.row > latest.row ? current : latest), { row: -1 });
-        }
+
+        // First, try for a perfect match of company and title.
+        existingRowInfoToUpdate = potentialMatches.find(e => e.title && e.title.toLowerCase() === jobTitle.toLowerCase());
+
+        // --- THIS IS THE KEY CHANGE ---
+        // If no exact match is found, DO NOT fall back to a company-only match.
+        // This prevents updating the wrong job application. The system will create a new row instead.
+
         if (existingRowInfoToUpdate && existingRowInfoToUpdate.row !== -1) {
             targetSheetRowForUpdate = existingRowInfoToUpdate.row;
+            Logger.log(`[_trackerDataHandler INFO] Found existing row #${targetSheetRowForUpdate} to update for Company: "${companyName}", Title: "${jobTitle}".`);
         }
+    } else {
+        Logger.log(`[_trackerDataHandler INFO] Company or Title requires manual review. A new row will be created instead of attempting an update.`);
     }
 
+    const finalStatusToSet = applicationStatus || DEFAULT_STATUS;
+
     if (targetSheetRowForUpdate !== -1 && existingRowInfoToUpdate) {
+        // This is the "UPDATE an existing row" path.
+        // (The existing logic for updating the rowDataForSheet array is good, keep it as is)
         const rowDataForSheet = [...existingRowInfoToUpdate.rowData];
         rowDataForSheet[PROCESSED_TIMESTAMP_COL - 1] = currentTimestamp;
         rowDataForSheet[LAST_UPDATE_DATE_COL - 1] = emailDate;
@@ -425,6 +432,9 @@ function _trackerDataHandler(geminiResult, message, companyIndex, dataSheet) {
             requiresManualReview: requiresManualReview
         };
     } else {
+        // This is the "CREATE a new row" path.
+        // This path is now taken if no exact match is found OR if company/title needs manual review.
+        // (The existing logic for creating a new row is good, keep it as is)
         const rowDataForSheet = new Array(TOTAL_COLUMNS_IN_APP_SHEET).fill("");
         rowDataForSheet[PROCESSED_TIMESTAMP_COL - 1] = currentTimestamp;
         rowDataForSheet[EMAIL_DATE_COL - 1] = emailDate;
@@ -439,7 +449,7 @@ function _trackerDataHandler(geminiResult, message, companyIndex, dataSheet) {
         rowDataForSheet[EMAIL_ID_COL - 1] = msgId;
         
         return {
-            newRowData: rowDataForSheet,
+            newRowData: [rowDataForSheet], // Ensure this is returned as an array of rows
             requiresManualReview: requiresManualReview
         };
     }

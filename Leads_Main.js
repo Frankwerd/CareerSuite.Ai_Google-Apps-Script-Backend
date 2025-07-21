@@ -41,7 +41,7 @@ function _leadsParser(subject, body, key) {
 }
 
 // --- START: Replacement for _leadsDataHandler in Leads_Main.js ---
-function _leadsDataHandler(geminiResult, message, companyIndex, dataSheet) {
+function _leadsDataHandler(geminiResult, message, dataSheet) {
     const newRows = [];
     let requiresManualReview = false; // Generally false for leads, as we just log what we find.
 

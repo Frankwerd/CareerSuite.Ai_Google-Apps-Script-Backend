@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-### ➡️ [Install the CareerSuite.ai Chrome Extension from the Web Store](https://chrome.google.com/webstore/detail/careersuiteai/your-extension-id-here)
+### ➡️ [Install the CareerSuite.ai Chrome Extension from the Web Store](https://careersuiteai.vercel.app/download)
 
 ## Overview
 

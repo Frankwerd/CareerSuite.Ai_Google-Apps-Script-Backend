@@ -51,11 +51,11 @@ The following diagram illustrates the data flow. All components under "User's Go
 
 ```mermaid
 graph TD
-    subgraph User's Browser
-        A[CareerSuite.ai Chrome Extension]
+    subgraph "User's Browser"
+        A["CareerSuite.ai Chrome Extension"]
     end
 
-    subgraph User's Google Account
+    subgraph "User's Google Account"
         B["Google Apps Script Web App<br>(WebApp_Endpoints.js)"]
         C["Google Apps Script Triggers<br>(Triggers.js)"]
         D["Processing Engine<br>(Main.js)"]
@@ -65,24 +65,23 @@ graph TD
         H["User Properties<br>(Stores API Key)"]
     end
 
-    subgraph External Services
-        I[Google Gemini API]
+    subgraph "External Services"
+        I["Google Gemini API"]
     end
 
-    A -- 1. Authenticated Request --> B
-    B -- "2. Creates Sheet, Stores Key" --> F
-    B -- " " --> H
-    C -- "3. Runs Hourly" --> D
-    G -- "4. Gmail Filter Labels Email" --> D
-    D -- "5. Gets Email & API Key" --> G
-    D -- " " --> H
-    D -- "6. Sends Email Text for Parsing" --> E
-    E -- "7. Makes API Call" --> I
-    I -- "8. Returns Parsed JSON" --> E
-    E -- "9. Returns Data to Engine" --> D
-    D -- "10. Writes Data to Sheet" --> F
-    D -- "11. Updates Gmail Label" --> G
+    %% Define Connections
+    A --> B
+    B --> F
+    B --> H
+    C --> D
+    D --> E
+    D --> F
+    D --> G
+    D --> H
+    E --> I
+    I --> E
 
+    %% Define Styling
     style A fill:#cce5ff,stroke:#007bff
     style B fill:#d4edda,stroke:#155724
     style C fill:#f8d7da,stroke:#721c24

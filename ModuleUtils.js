@@ -3,6 +3,7 @@ function _setupModule(config) {
   Logger.log(`\n==== ${FUNC_NAME}: STARTING - ${config.moduleName} Module Setup ====`);
   let messages = [];
   let moduleSuccess = true;
+  let dataSh; // This will hold the sheet object for the module
 
   if (!config.activeSS || typeof config.activeSS.getId !== 'function') {
     const errMsg = "CRITICAL: Invalid spreadsheet object passed.";
@@ -14,7 +15,7 @@ function _setupModule(config) {
 
   // Setup module-specific sheet
   try {
-    let dataSh = activeSS.getSheetByName(config.sheetTabName);
+    dataSh = activeSS.getSheetByName(config.sheetTabName);
     if (!dataSh) {
       dataSh = activeSS.insertSheet(config.sheetTabName);
       Logger.log(`[${FUNC_NAME} INFO] Created new sheet: "${config.sheetTabName}".`);

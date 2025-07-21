@@ -62,6 +62,32 @@ function runFullProjectInitialSetup(passedSpreadsheet) {
 
     PropertiesService.getScriptProperties().setProperty(SPREADSHEET_ID_KEY, activeSS.getId());
 
+    // --- START: RESTORED DASHBOARD & JOB DATA SETUP ---
+    Logger.log(`\n[${FUNC_NAME} INFO] --- Starting Dashboard & Job Data Setup ---`);
+    try {
+        const dashboardSheet = getOrCreateDashboardSheet(activeSS);
+        const jobDataSheet = getOrCreateJobDataSheet(activeSS);
+
+        if (dashboardSheet && jobDataSheet) {
+            formatDashboardSheet(dashboardSheet);
+            setupJobDataSheetFormulas(jobDataSheet);
+            updateDashboardMetrics(dashboardSheet, jobDataSheet);
+
+            // Add success messages
+            const dashboardMsg = `Dashboard Module: Sheet setup and charts configured.`;
+            setupMessages.push(dashboardMsg);
+            Logger.log(`[${FUNC_NAME} INFO] ${dashboardMsg}`);
+
+        } else {
+            throw new Error("Failed to get or create Dashboard or Job Data sheets.");
+        }
+    } catch (e) {
+        Logger.log(`[${FUNC_NAME} CRITICAL ERROR] Dashboard setup Exception: ${e.toString()}\n${e.stack}`);
+        setupMessages.push(`Dashboard Module: CRITICAL EXCEPTION - ${e.message}`);
+        overallSuccess = false; // Mark the overall setup as failed
+    }
+    // --- END: RESTORED DASHBOARD & JOB DATA SETUP ---
+
     if (typeof TEMPLATE_SHEET_ID !== 'undefined' && TEMPLATE_SHEET_ID !== "" && activeSS.getId() === TEMPLATE_SHEET_ID) {
         const templateMsg = `[${FUNC_NAME} INFO] Target spreadsheet is the TEMPLATE. Setup SKIPPED.`;
         Logger.log(templateMsg);

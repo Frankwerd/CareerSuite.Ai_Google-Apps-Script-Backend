@@ -108,29 +108,6 @@ function setSharedGeminiApiKey_UI() {
   }
 }
 
-/**
- * Manually sets the shared Gemini API Key in UserProperties.
- * This function is intended for temporary use or for environments where the UI is not available.
- * @deprecated This function is not recommended for production use. Use `setSharedGeminiApiKey_UI` instead.
- * The user must edit the script and insert their key directly into the function.
- */
-function TEMPORARY_manualSetSharedGeminiApiKey() {
-  const YOUR_GEMINI_KEY_HERE = 'AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'; // <<< EDIT THIS LINE
-  const propertyName = GEMINI_API_KEY_PROPERTY; // From Config.gs
-
-  if (YOUR_GEMINI_KEY_HERE === 'AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' || YOUR_GEMINI_KEY_HERE.trim() === '') {
-    const msg = `ERROR: Edit TEMPORARY_manualSetSharedGeminiApiKey in AdminUtils.gs with your key. Property: "${propertyName}".`;
-    Logger.log(msg);
-    try { SpreadsheetApp.getUi().alert('Action Required', msg, SpreadsheetApp.getUi().ButtonSet.OK); }
-    catch(e) { try { Browser.msgBox('Action Required', msg, Browser.Buttons.OK); } catch(e2) {} }
-    return;
-  }
-  PropertiesService.getUserProperties().setProperty(propertyName, YOUR_GEMINI_KEY_HERE);
-  const successMsg = `UserProperty "${propertyName}" MANUALLY SET. IMPORTANT: For security, clear YOUR_GEMINI_KEY_HERE in the code.`;
-  Logger.log(successMsg);
-  try { SpreadsheetApp.getUi().alert('API Key Manually Set', successMsg, SpreadsheetApp.getUi().ButtonSet.OK); }
-  catch(e) { try { Browser.msgBox('API Key Manually Set', successMsg, Browser.Buttons.OK); } catch(e2) {} }
-}
 
 /**
  * Displays all UserProperties set for this script project to the logs.

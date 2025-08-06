@@ -1,0 +1,2 @@
+Matches: from:(indeedapply@indeed.com OR notifications@linkedin.com OR donotreply@workday.com OR no-reply@greenhouse.io OR greenhouse.io OR lever.co OR myworkday.com OR icims.com OR wellfound.com OR angel.co OR hi.wellfound.com OR linkedin.com OR indeed.com OR ziprecruiter.com OR glassdoor.com OR hired.com)
+Do this: Skip Inbox, Apply label "AppToProcess"
